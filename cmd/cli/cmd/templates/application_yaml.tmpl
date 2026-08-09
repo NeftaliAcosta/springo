@@ -1,0 +1,18 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: "dev"
+  datasource:
+    driver: "sqlite"
+    url: "app.db"
+    auto-migrate: true
+  security:
+    jwt:
+      algorithm: "HS256"
+      secret: "your-super-secret-development-key-32-chars-long"
+      expiration: 60
+      public-paths:
+        - "/swagger"
+        - "/api/v1/users/login"

@@ -1,0 +1,14 @@
+package in
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/infrastructure/dtos/request"
+	"{{.ModulePath}}/internal/infrastructure/dtos/response"
+)
+
+type {{.StructName}}UseCase interface {
+	FindAll(ctx context.Context) ([]response.{{.StructName}}Response, error)
+	FindByID(ctx context.Context, id uint) (response.{{.StructName}}Response, error)
+	Create(ctx context.Context, req request.Create{{.StructName}}Request) (response.{{.StructName}}Response, error)
+}

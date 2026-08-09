@@ -1,0 +1,71 @@
+package service
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/application/port/output"
+	"{{.ModulePath}}/internal/domain/model"
+	"{{.ModulePath}}/internal/domain/port/in"
+	"{{.ModulePath}}/internal/infrastructure/dtos/request"
+	"{{.ModulePath}}/internal/infrastructure/dtos/response"
+	"{{.FrameworkModule}}/framework/ioc"
+)
+
+type {{.LowerName}}ServiceImpl struct {
+	repo output.{{.StructName}}PersistencePort
+}
+
+func init() {
+	ioc.GetContainer().RegisterServiceFactory("{{.StructName}}Service", func() interface{} {
+		repo := ioc.GetContainer().GetBean("{{.StructName}}Repository").(output.{{.StructName}}PersistencePort)
+		return New{{.StructName}}Service(repo)
+	})
+}
+
+func New{{.StructName}}Service(repo output.{{.StructName}}PersistencePort) in.{{.StructName}}UseCase {
+	return &{{.LowerName}}ServiceImpl{repo: repo}
+}
+
+func (s *{{.LowerName}}ServiceImpl) FindAll(ctx context.Context) ([]response.{{.StructName}}Response, error) {
+	models, err := s.repo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]response.{{.StructName}}Response, len(models))
+	for i, m := range models {
+		res[i] = response.{{.StructName}}Response{
+			ID:        m.ID,
+			Name:      m.Name,
+			CreatedAt: m.CreatedAt,
+		}
+	}
+	return res, nil
+}
+
+func (s *{{.LowerName}}ServiceImpl) FindByID(ctx context.Context, id uint) (response.{{.StructName}}Response, error) {
+	m, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return response.{{.StructName}}Response{}, err
+	}
+	return response.{{.StructName}}Response{
+		ID:        m.ID,
+		Name:      m.Name,
+		CreatedAt: m.CreatedAt,
+	}, nil
+}
+
+func (s *{{.LowerName}}ServiceImpl) Create(ctx context.Context, req request.Create{{.StructName}}Request) (response.{{.StructName}}Response, error) {
+	m := model.{{.StructName}}{
+		Name: req.Name,
+	}
+	if err := s.repo.Save(ctx, &m); err != nil {
+		return response.{{.StructName}}Response{}, err
+	}
+	return response.{{.StructName}}Response{
+		ID:        m.ID,
+		Name:      m.Name,
+		CreatedAt: m.CreatedAt,
+	}, nil
+}
+
+var _ in.{{.StructName}}UseCase = (*{{.LowerName}}ServiceImpl)(nil)

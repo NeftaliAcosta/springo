@@ -1,0 +1,11 @@
+package in
+
+import (
+	"context"
+	"{{.ModuleName}}/internal/domain/model"
+)
+
+type UserUseCase interface {
+	Create(ctx context.Context, user *model.User) error
+	GetByID(ctx context.Context, id uint) (*model.User, error)
+}

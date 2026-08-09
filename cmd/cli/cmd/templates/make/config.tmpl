@@ -1,0 +1,24 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: {{.ProjectName}}
+  datasource:
+    driver: sqlite
+    url: springo.db
+  security:
+    jwt:
+      secret: "super-secret-key-at-least-32-chars-long-security"
+      expiration: 86400
+  event:
+    enabled: true
+    concurrency:
+      enabled: true
+      pool-size: 10
+      queue-capacity: 100
+      rejection-policy: block
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: "*"

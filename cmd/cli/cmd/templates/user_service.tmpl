@@ -1,0 +1,30 @@
+package service
+
+import (
+	"context"
+	"{{.FrameworkModule}}/framework/ioc"
+	"{{.ModuleName}}/internal/application/port/output"
+	"{{.ModuleName}}/internal/domain/model"
+	"{{.ModuleName}}/internal/domain/port/in"
+)
+
+type userServiceImpl struct {
+	repo output.UserPersistencePort
+}
+
+func init() {
+	ioc.GetContainer().RegisterServiceFactory("UserService", func() interface{} {
+		repo := ioc.GetContainer().GetBean("UserRepository").(output.UserPersistencePort)
+		return &userServiceImpl{repo: repo}
+	})
+}
+
+func (s *userServiceImpl) Create(ctx context.Context, user *model.User) error {
+	return s.repo.Save(ctx, user)
+}
+
+func (s *userServiceImpl) GetByID(ctx context.Context, id uint) (*model.User, error) {
+	return s.repo.FindByID(ctx, id)
+}
+
+var _ in.UserUseCase = (*userServiceImpl)(nil)

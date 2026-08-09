@@ -1,0 +1,9 @@
+module {{.ModuleName}}
+
+go 1.26.5
+
+require (
+	github.com/NeftaliAcosta/springo v1.0.0-rc1
+)
+
+{{if .IsLocal}}replace github.com/NeftaliAcosta/springo => {{.LocalFrameworkPath}}{{end}}

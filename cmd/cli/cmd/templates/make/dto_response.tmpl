@@ -1,0 +1,9 @@
+package response
+
+import "time"
+
+type {{.StructName}}Response struct {
+	ID        uint      `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+}

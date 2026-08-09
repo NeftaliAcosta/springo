@@ -1,0 +1,13 @@
+package output
+
+import (
+	"context"
+	"{{.ModulePath}}/internal/domain/model"
+)
+
+type {{.StructName}}PersistencePort interface {
+	FindAll(ctx context.Context) ([]model.{{.StructName}}, error)
+	FindByID(ctx context.Context, id uint) (*model.{{.StructName}}, error)
+	Save(ctx context.Context, item *model.{{.StructName}}) error
+	Delete(ctx context.Context, id uint) error
+}

@@ -1,0 +1,57 @@
+package rest
+
+import (
+	"context"
+
+	"{{.FrameworkModule}}/framework/web"
+	"{{.ModuleName}}/internal/domain/model"
+	"{{.ModuleName}}/internal/domain/port/in"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type UserController struct {
+	userUseCase in.UserUseCase
+}
+
+func init() {
+	web.Register(func(r chi.Router) {
+		service := web.GetService[in.UserUseCase]("UserService")
+		NewUserController(r, service)
+	})
+}
+
+func NewUserController(r chi.Router, s in.UserUseCase) {
+	c := &UserController{userUseCase: s}
+
+	r.Route("/users", func(r chi.Router) {
+		r.Post("/", web.Dispatch(c.create))
+		r.Get("/{id}", web.Dispatch(c.get))
+	})
+}
+
+type CreateUserRequest struct {
+	Username string `json:"username" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=6"`
+}
+
+func (c *UserController) create(ctx context.Context, req CreateUserRequest) (any, error) {
+	user := model.User{
+		Username: req.Username,
+		Email:    req.Email,
+		Password: req.Password,
+	}
+	if err := c.userUseCase.Create(ctx, &user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+type UserDetailRequest struct {
+	ID uint `path:"id" validate:"required,gt=0"`
+}
+
+func (c *UserController) get(ctx context.Context, req UserDetailRequest) (any, error) {
+	return c.userUseCase.GetByID(ctx, req.ID)
+}

@@ -1,0 +1,20 @@
+package migration
+
+import (
+	"gorm.io/gorm"
+	"{{.FrameworkModule}}/framework/database"
+)
+
+func init() {
+	database.RegisterMigration(database.Migration{
+		Name: "{{.MigrationName}}",
+		Up: func(db *gorm.DB) error {
+			// TODO: Define Up migration logic
+			return nil
+		},
+		Down: func(db *gorm.DB) error {
+			// TODO: Define Down migration logic
+			return nil
+		},
+	})
+}

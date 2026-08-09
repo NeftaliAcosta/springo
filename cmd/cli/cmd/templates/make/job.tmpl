@@ -1,0 +1,19 @@
+package scheduler
+
+import (
+	"context"
+	"log"
+	"time"
+)
+
+// {{.StructName}}Job represents a scheduled task
+type {{.StructName}}Job struct{}
+
+func New{{.StructName}}Job() *{{.StructName}}Job {
+	return &{{.StructName}}Job{}
+}
+
+func (j *{{.StructName}}Job) Run(ctx context.Context) error {
+	log.Printf("[Job] Running {{.StructName}}Job at %s", time.Now().Format(time.RFC3339))
+	return nil
+}

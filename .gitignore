@@ -1,0 +1,37 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+springo
+springo-bin
+main
+
+# Test & OS files
+*.out
+*.test
+.DS_Store
+.idea/
+.vscode/
+*.log
+coverage.out
+
+# Local secrets (commit sanitized examples explicitly when needed)
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# SQLite & Database local testing files
+*.db
+*.db-shm
+*.db-wal
+
+# Temp directories
+/tmp/
+.springo/
+demo-api/*.db
+demo-api/tmp/

@@ -1,0 +1,115 @@
+package framework
+
+import (
+	"context"
+	"fmt"
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/scheduler"
+	"net/http"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestApplication_Lifecycle(t *testing.T) {
+	// Restore registrations and configs to prevent test contamination
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	// Set test profile so it doesn't load physical schema/data files
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	// Bootstrap application using BootstrapE instead of Bootstrap to avoid os.Exit on error
+	app, err := BootstrapE(Options{
+		DisableBanner: true,
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.Router)
+
+	// Run application in background
+	errChan := make(chan error, 1)
+	ctx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+
+	go func() {
+		errChan <- app.Run(ctx)
+	}()
+
+	// Wait deterministically for server to be ready
+	select {
+	case <-app.Ready():
+		// Server started and listener is active
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for application to become ready")
+	}
+
+	// Verify server started and listener is active
+	assert.NotNil(t, app.GetHttpServer())
+	assert.NotNil(t, app.GetListener())
+
+	// Trigger clean shutdown
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err = app.Shutdown(shutdownCtx)
+	assert.NoError(t, err)
+
+	// Expect Run() to have returned http.ErrServerClosed or nil
+	select {
+	case runErr := <-errChan:
+		assert.True(t, runErr == nil || runErr == http.ErrServerClosed)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timeout waiting for application to exit Run loop")
+	}
+}
+
+func TestApplication_BootstrapE_Success(t *testing.T) {
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	app, err := BootstrapE(Options{
+		DisableBanner: true,
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, app)
+	assert.NotNil(t, app.Router)
+}
+
+func TestApplication_BootstrapE_Failure(t *testing.T) {
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	scheduler.Register("AuthTokenJob", func(ctx context.Context) error {
+		return fmt.Errorf("mocked critical auth token failure")
+	})
+
+	app, err := BootstrapE(Options{
+		DisableBanner: true,
+	})
+	assert.Error(t, err)
+	assert.Nil(t, app)
+	assert.Contains(t, err.Error(), "mocked critical auth token failure")
+}

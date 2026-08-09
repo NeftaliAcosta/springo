@@ -1,0 +1,43 @@
+package {{.PackageName}}
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/domain/port/in"
+	"{{.ModulePath}}/internal/infrastructure/dtos/request"
+	"github.com/go-chi/chi/v5"
+	"{{.FrameworkModule}}/framework/web"
+)
+
+type {{.StructName}}Controller struct {
+	useCase in.{{.StructName}}UseCase
+}
+
+func init() {
+	web.Register(func(r chi.Router) {
+		useCase := web.GetService[in.{{.StructName}}UseCase]("{{.StructName}}Service")
+		New{{.StructName}}Controller(r, useCase)
+	})
+}
+
+func New{{.StructName}}Controller(r chi.Router, useCase in.{{.StructName}}UseCase) *{{.StructName}}Controller {
+	c := &{{.StructName}}Controller{useCase: useCase}
+	r.Route("/{{.PluralName}}", func(r chi.Router) {
+		r.Get("/", web.Dispatch(c.list))
+		r.Get("/{id}", web.Dispatch(c.get))
+		r.Post("/", web.Dispatch(c.create))
+	})
+	return c
+}
+
+func (c *{{.StructName}}Controller) list(ctx context.Context) (any, error) {
+	return c.useCase.FindAll(ctx)
+}
+
+func (c *{{.StructName}}Controller) get(ctx context.Context, req request.Get{{.StructName}}Request) (any, error) {
+	return c.useCase.FindByID(ctx, req.ID)
+}
+
+func (c *{{.StructName}}Controller) create(ctx context.Context, req request.Create{{.StructName}}Request) (any, error) {
+	return c.useCase.Create(ctx, req)
+}

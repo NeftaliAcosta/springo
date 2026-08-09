@@ -1,0 +1,57 @@
+package persistence
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/application/port/output"
+	"{{.ModulePath}}/internal/domain/model"
+	"{{.FrameworkModule}}/framework/data"
+	"{{.FrameworkModule}}/framework/ioc"
+	"gorm.io/gorm"
+)
+
+type {{.LowerName}}RepositoryAdapter struct {
+	data.BaseRepository[{{.StructName}}Entity]
+}
+
+func init() {
+	ioc.GetContainer().RegisterRepositoryFactory("{{.StructName}}Repository", func(dbConn *gorm.DB) interface{} {
+		return &{{.LowerName}}RepositoryAdapter{
+			BaseRepository: data.NewBaseRepository[{{.StructName}}Entity](dbConn),
+		}
+	})
+}
+
+func (a *{{.LowerName}}RepositoryAdapter) Save(ctx context.Context, item *model.{{.StructName}}) error {
+	entity := From{{.StructName}}Domain(*item)
+	err := a.BaseRepository.Save(ctx, &entity)
+	item.ID = entity.ID
+	return err
+}
+
+func (a *{{.LowerName}}RepositoryAdapter) FindAll(ctx context.Context) ([]model.{{.StructName}}, error) {
+	entities, err := a.BaseRepository.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]model.{{.StructName}}, len(entities))
+	for i, e := range entities {
+		items[i] = e.ToDomain()
+	}
+	return items, nil
+}
+
+func (a *{{.LowerName}}RepositoryAdapter) FindByID(ctx context.Context, id uint) (*model.{{.StructName}}, error) {
+	entity, err := a.BaseRepository.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	m := entity.ToDomain()
+	return &m, nil
+}
+
+func (a *{{.LowerName}}RepositoryAdapter) Delete(ctx context.Context, id uint) error {
+	return a.BaseRepository.Delete(ctx, id)
+}
+
+var _ output.{{.StructName}}PersistencePort = (*{{.LowerName}}RepositoryAdapter)(nil)

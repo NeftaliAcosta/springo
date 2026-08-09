@@ -1,0 +1,22 @@
+package event
+
+import (
+	"context"
+	"log"
+	"time"
+	"{{.FrameworkModule}}/framework/event"
+)
+
+type {{.StructName}}Event struct {
+	ID        string    `json:"id"`
+	OccurredAt time.Time `json:"occurredAt"`
+}
+
+func init() {
+	event.RegisterListener(On{{.StructName}}Event)
+}
+
+func On{{.StructName}}Event(ctx context.Context, ev {{.StructName}}Event) error {
+	log.Printf("[Event] Processed {{.StructName}}Event ID=%s", ev.ID)
+	return nil
+}

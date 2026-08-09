@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en" id="html-root">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SprinGo Actuator Console</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #080b11;
+            --surface-color: #0f131a;
+            --surface-border: #1a202c;
+            --brand-color: #6366f1; /* Indigo */
+            --brand-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            --text-primary: #f8fafc;
+            --text-secondary: #8e9cae;
+            --success-color: #10b981;
+            --danger-color: #e11d48;
+            --danger-text: #fda4af;
+            --warning-color: #f59e0b;
+            --card-radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            letter-spacing: -0.01em;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(79, 70, 229, 0.04) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem;
+        }
+
+        /* Glassmorphism / Surface panel */
+        .glass {
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.2);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2.5rem;
+            padding: 1.25rem 1.75rem;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.35rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            letter-spacing: -0.02em;
+        }
+
+        .logo .spring { color: #ffffff; }
+        .logo .go { color: var(--brand-color); }
+        .logo-badge {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            font-size: 0.7rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.02em;
+        }
+
+        /* Tabs Navigation */
+        .nav-tabs {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.35rem;
+            margin-bottom: 2.5rem;
+            overflow-x: auto;
+            border-bottom: none;
+            background: #0f131a;
+            border-radius: var(--card-radius);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-weight: 550;
+            font-size: 0.85rem;
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* Panels */
+        .panel {
+            display: none;
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .stat-card {
+            padding: 1.5rem;
+            position: relative;
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--card-radius);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.6rem;
+        }
+
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            font-family: 'Outfit', sans-serif;
+            color: #ffffff;
+            margin-bottom: 0.2rem;
+            letter-spacing: -0.02em;
+        }
+
+        .stat-desc {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        /* Grids & Cards */
+        .dashboard-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 968px) {
+            .dashboard-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card-header {
+            padding: 1.1rem 1.5rem;
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #ffffff;
+            letter-spacing: -0.01em;
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        /* Interactive Elements */
+        button.btn {
+            background: var(--brand-color);
+            color: #ffffff;
+            font-weight: 600;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.85rem;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+
+        button.btn:hover {
+            background: #4f46e5;
+        }
+
+        button.btn-outline {
+            background: transparent;
+            border: 1px solid var(--surface-border);
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+
+        button.btn-outline:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: #334155;
+        }
+
+        button.btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        button.btn-danger:hover {
+            background: #be123c;
+        }
+
+        button.btn-outline.btn-danger {
+            background: rgba(225, 29, 72, 0.03);
+            border-color: rgba(225, 29, 72, 0.15);
+            color: var(--text-secondary);
+        }
+
+        button.btn-outline.btn-danger:hover {
+            background: rgba(225, 29, 72, 0.12);
+            border-color: rgba(225, 29, 72, 0.4);
+            color: var(--danger-text);
+        }
+
+        /* Logger controls */
+        .logger-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 0;
+            border-bottom: 1px solid var(--surface-border);
+        }
+
+        .logger-row:last-child {
+            border-bottom: none;
+        }
+
+        select.select {
+            background: #080b11;
+            border: 1px solid var(--surface-border);
+            color: var(--text-primary);
+            padding: 0.45rem 0.85rem;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: border-color 0.2s ease;
+        }
+
+        select.select:focus {
+            border-color: var(--brand-color);
+        }
+
+        /* Code/Logs viewer */
+        pre.code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background: #080b11;
+            padding: 1.25rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid var(--surface-border);
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+            max-height: 500px;
+        }
+
+        /* Tables */
+        table.table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+            table-layout: fixed;
+        }
+
+        table.table th {
+            padding: 0.85rem 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--surface-border);
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        table.table td {
+            padding: 0.95rem 1rem;
+            border-bottom: 1px solid var(--surface-border);
+            vertical-align: middle;
+            color: #cbd5e1;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        table.table tr:last-child td {
+            border-bottom: none;
+        }
+
+        table.table tr:hover td {
+            background: rgba(255, 255, 255, 0.015);
+        }
+
+        table.table pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 0;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 0.35rem 0.55rem;
+            border-radius: 4px;
+            max-height: 80px;
+            overflow-y: auto;
+            border: 1px solid var(--surface-border);
+            color: #94a3b8;
+        }
+
+        /* Subtle Row Action Buttons */
+        .btn-table {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--surface-border);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.25rem 0.55rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            white-space: nowrap;
+        }
+        
+        .btn-table:hover {
+            background: rgba(99, 102, 241, 0.08);
+            border-color: rgba(99, 102, 241, 0.3);
+            color: #ffffff;
+        }
+        
+        .btn-table-danger {
+            color: #fda4af;
+            border-color: rgba(225, 29, 72, 0.2);
+            background: rgba(225, 29, 72, 0.02);
+        }
+        
+        .btn-table-danger:hover {
+            background: rgba(225, 29, 72, 0.1);
+            border-color: rgba(225, 29, 72, 0.4);
+            color: #ffffff;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-up { background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; }
+        .status-down { background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); color: #fb7185; }
+        .status-degraded { background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); color: #fbbf24; }
+
+        /* Search input */
+        .search-bar {
+            width: 100%;
+            max-width: 320px;
+            background: #080b11;
+            border: 1px solid var(--surface-border);
+            color: var(--text-primary);
+            padding: 0.5rem 0.95rem;
+            border-radius: 6px;
+            outline: none;
+            margin-bottom: 1.25rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .search-bar:focus {
+            border-color: var(--brand-color);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="glass">
+            <div class="logo">
+                <span class="spring">Sprin</span><span class="go">Go</span>
+                <span class="logo-badge">Actuator Console</span>
+            </div>
+            <div>
+                <button class="btn btn-outline" onclick="refreshAll()">🔄 Refresh</button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="nav-tabs glass">
+            <button class="tab-btn active" onclick="switchTab('tab-dashboard', this)">📊 Dashboard</button>
+            <button class="tab-btn" onclick="switchTab('tab-loggers', this)">📝 Loggers</button>
+            <button class="tab-btn" onclick="switchTab('tab-tasks', this)">⏰ Scheduled Tasks</button>
+            <button class="tab-btn" onclick="switchTab('tab-dlq', this)">📥 DLQ &amp; Events</button>
+            <button class="tab-btn" onclick="switchTab('tab-beans', this)">🫘 Beans</button>
+            <button class="tab-btn" onclick="switchTab('tab-env', this)">🌐 Environment</button>
+            <button class="tab-btn" onclick="switchTab('tab-thread', this)">🧩 Thread Dump</button>
+        </div>
+
+        <!-- Tab Panels -->
+
+        <!-- 1. DASHBOARD -->
+        <div id="tab-dashboard" class="panel active">
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="glass stat-card">
+                    <div class="stat-label">System Health</div>
+                    <div id="stat-health" class="stat-value">---</div>
+                    <div class="stat-desc">Overall application check</div>
+                </div>
+                <div class="glass stat-card">
+                    <div class="stat-label">Uptime</div>
+                    <div id="stat-uptime" class="stat-value">---</div>
+                    <div class="stat-desc">Since application startup</div>
+                </div>
+                <div class="glass stat-card">
+                    <div class="stat-label">Goroutines</div>
+                    <div id="stat-goroutines" class="stat-value">---</div>
+                    <div class="stat-desc">Active go threads</div>
+                </div>
+                <div class="glass stat-card">
+                    <div class="stat-label">Memory Alloc</div>
+                    <div id="stat-memory" class="stat-value">---</div>
+                    <div class="stat-desc">Currently allocated memory</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Content -->
+            <div class="dashboard-content">
+                <!-- Database Connections -->
+                <div class="glass">
+                    <div class="card-header">
+                        <div class="card-title">🔌 Database Status</div>
+                    </div>
+                    <div class="card-body" id="db-health-container">
+                        Loading database details...
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="glass">
+                    <div class="card-header">
+                        <div class="card-title">🖥️ System Metrics</div>
+                    </div>
+                    <div class="card-body">
+                        <table class="table">
+                            <tr>
+                                <td>Go Version</td>
+                                <td id="sys-go-version" class="text-secondary">---</td>
+                            </tr>
+                            <tr>
+                                <td>Platform</td>
+                                <td id="sys-platform" class="text-secondary">---</td>
+                            </tr>
+                            <tr>
+                                <td>CPU Core Count</td>
+                                <td id="sys-cores" class="text-secondary">---</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. LOGGERS -->
+        <div id="tab-loggers" class="panel">
+            <div class="glass">
+                <div class="card-header">
+                    <div class="card-title">📝 Dynamic Logging Level</div>
+                </div>
+                <div class="card-body">
+                    <div class="logger-row">
+                        <div>
+                            <strong>Global Logger Level</strong>
+                            <p class="text-secondary" style="font-size: 0.8rem; margin-top: 0.2rem;">Adjusts root log level dynamically across all framework modules.</p>
+                        </div>
+                        <div>
+                            <select id="global-log-level" class="select" onchange="changeLogLevel(this.value)">
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARN">WARN</option>
+                                <option value="ERROR">ERROR</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. SCHEDULED TASKS -->
+        <div id="tab-tasks" class="panel">
+            <div class="glass">
+                <div class="card-header">
+                    <div class="card-title">⏰ Cron Jobs &amp; ShedLocks</div>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 22%">Job Name</th>
+                                <th style="width: 14%">Schedule / Interval</th>
+                                <th style="width: 12%">Startup / Priority</th>
+                                <th style="width: 8%">Critical</th>
+                                <th style="width: 14%">Distributed Lock</th>
+                                <th style="width: 11%">Last Run</th>
+                                <th style="width: 11%">Next Run</th>
+                                <th style="width: 8%; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scheduler-table-body">
+                            <tr><td colspan="8" class="text-secondary">Loading tasks...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. DLQ & EVENTS -->
+        <div id="tab-dlq" class="panel">
+            <div class="glass">
+                <div class="card-header">
+                    <div class="card-title">📥 Dead Letter Queue (Failed Events)</div>
+                    <div>
+                        <button class="btn btn-danger btn-outline" onclick="purgeAllDLQ()">🗑️ Purge All</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th style="width: 5%">ID</th>
+                                <th style="width: 22%">Event Type</th>
+                                <th style="width: 15%">Listener</th>
+                                <th style="width: 25%">Error Trace</th>
+                                <th style="width: 18%">Payload</th>
+                                <th style="width: 5%; text-align: center;">Retries</th>
+                                <th style="width: 10%; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dlq-table-body">
+                            <tr><td colspan="7" class="text-secondary">Loading DLQ events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. BEANS -->
+        <div id="tab-beans" class="panel">
+            <input type="text" id="bean-search" class="search-bar" placeholder="🔍 Search beans..." onkeyup="filterBeans()">
+            <div class="glass">
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Bean Name</th>
+                                <th>Type / Struct</th>
+                                <th>Scope</th>
+                            </tr>
+                        </thead>
+                        <tbody id="beans-table-body">
+                            <tr><td colspan="3" class="text-secondary">Loading beans...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. ENVIRONMENT -->
+        <div id="tab-env" class="panel">
+            <input type="text" id="env-search" class="search-bar" placeholder="🔍 Search properties..." onkeyup="filterEnv()">
+            <div class="glass">
+                <div class="card-body">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Property Key</th>
+                                <th>Value (Masked)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="env-table-body">
+                            <tr><td colspan="2" class="text-secondary">Loading properties...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7. THREAD DUMP -->
+        <div id="tab-thread" class="panel">
+            <div class="glass">
+                <div class="card-header">
+                    <div class="card-title">🧩 Active Goroutines Stack Trace</div>
+                    <div>
+                        <button class="btn btn-outline" onclick="loadThreadDump()">🔄 Refresh Stack</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <pre class="code-block" id="threaddump-container">
+                        Loading stack...
+                    </pre>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JS Logic -->
+    <script>
+        let allBeans = [];
+        let allEnv = [];
+
+        function switchTab(tabId, btn) {
+            if (!btn) {
+                btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId));
+            }
+            if (!btn) return;
+
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+
+            if (window.location.hash !== '#' + tabId) {
+                history.replaceState(null, null, '#' + tabId);
+            }
+
+            if (tabId === 'tab-thread') loadThreadDump();
+        }
+
+        async function apiGet(path) {
+            const r = await fetch(path);
+            if (!r.ok) throw new Error(`API error: ${r.status}`);
+            return r.json();
+        }
+
+        async function apiPost(path, body = {}) {
+            const r = await fetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            return r.ok;
+        }
+
+        let uptimeSeconds = 0;
+        let uptimeInterval = null;
+
+        function parseGoDuration(durationStr) {
+            if (!durationStr || durationStr === '---') return 0;
+            let totalSeconds = 0;
+            const regex = /(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/;
+            const matches = durationStr.match(regex);
+            if (matches) {
+                const hours = parseInt(matches[1] || 0, 10);
+                const minutes = parseInt(matches[2] || 0, 10);
+                const seconds = parseInt(matches[3] || 0, 10);
+                totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+            }
+            return totalSeconds;
+        }
+
+        function formatDuration(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            let parts = [];
+            if (hours > 0) parts.push(`${hours}h`);
+            if (minutes > 0) parts.push(`${minutes}m`);
+            if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+            return parts.join('');
+        }
+
+        function startUptimeTicker(initialDurationStr) {
+            uptimeSeconds = parseGoDuration(initialDurationStr);
+            document.getElementById('stat-uptime').textContent = formatDuration(uptimeSeconds);
+            
+            if (uptimeInterval) clearInterval(uptimeInterval);
+            uptimeInterval = setInterval(() => {
+                uptimeSeconds++;
+                document.getElementById('stat-uptime').textContent = formatDuration(uptimeSeconds);
+            }, 1000);
+        }
+
+        async function refreshAll() {
+            await Promise.all([
+                loadDashboard(),
+                loadLoggers(),
+                loadTasks(),
+                loadDLQ(),
+                loadBeans(),
+                loadEnv()
+            ]);
+        }
+
+        async function loadDashboard() {
+            try {
+                const info = await apiGet('/actuator/health');
+                const statHealth = document.getElementById('stat-health');
+                statHealth.textContent = info.status;
+                statHealth.className = 'stat-value ' + (
+                    info.status === 'UP' ? 'status-badge status-up' : 
+                    info.status === 'DEGRADED' ? 'status-badge status-degraded' : 'status-badge status-down'
+                );
+
+                startUptimeTicker(info.uptime || '0s');
+
+                if (info.system) {
+                    document.getElementById('stat-goroutines').textContent = info.system.goroutines || '---';
+                    document.getElementById('stat-memory').textContent = info.system.memory_usage || '---';
+                    document.getElementById('sys-go-version').textContent = info.system.go_version || '---';
+                    document.getElementById('sys-platform').textContent = info.system.platform || '---';
+                }
+
+                // Render databases
+                const dbContainer = document.getElementById('db-health-container');
+                dbContainer.innerHTML = '';
+                
+                if (info.components) {
+                    const keys = Object.keys(info.components).filter(k => k.startsWith('db.'));
+                    if (keys.length === 0) {
+                        dbContainer.innerHTML = `<p class="text-secondary">No DB component health data collected.</p>`;
+                    } else {
+                        keys.forEach(key => {
+                            const db = info.components[key];
+                            const card = document.createElement('div');
+                            card.style.marginBottom = '1rem';
+                            card.style.padding = '0.75rem';
+                            card.style.background = 'rgba(255, 255, 255, 0.02)';
+                            card.style.borderRadius = '8px';
+                            card.innerHTML = `
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                    <strong>${key}</strong>
+                                    <span class="status-badge ${db.status === 'UP' ? 'status-up' : 'status-down'}">${db.status}</span>
+                                </div>
+                                <div style="font-size:0.8rem; color:var(--text-secondary)">
+                                    ${db.details ? `Ping: ${db.details.ping_time || '---'} | Pool Open/Active: ${db.details.open || 0}/${db.details.in_use || 0}` : 'No stats available.'}
+                                </div>
+                            `;
+                            dbContainer.appendChild(card);
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadLoggers() {
+            try {
+                const data = await apiGet('/actuator/loggers');
+                document.getElementById('global-log-level').value = data.level || 'INFO';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function changeLogLevel(level) {
+            try {
+                const ok = await apiPost('/actuator/loggers', { configuredLevel: level });
+                if (ok) alert(`Log level updated to ${level}`);
+            } catch (err) {
+                alert(`Failed to update log level: ${err}`);
+            }
+        }
+
+        async function loadTasks() {
+            try {
+                const list = await apiGet('/actuator/shedlock');
+                const tbody = document.getElementById('scheduler-table-body');
+                tbody.innerHTML = '';
+                
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-secondary" style="text-align:center;">No scheduled tasks found.</td></tr>`;
+                    return;
+                }
+
+                list.forEach(t => {
+                    const lastRun = t.last_executed && !t.last_executed.startsWith('0001-01-01')
+                        ? new Date(t.last_executed).toLocaleTimeString()
+                        : 'Never';
+                    const nextRun = t.next_expected && !t.next_expected.startsWith('0001-01-01')
+                        ? new Date(t.next_expected).toLocaleTimeString()
+                        : 'Never';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${t.name}</strong></td>
+                        <td><code style="font-family:'JetBrains Mono'; color:var(--brand-color)">${t.cron || t.fixed_rate || t.fixed_delay || 'Manual'}</code></td>
+                        <td>${t.run_on_startup ? '✅' : '❌'} (P${t.priority})</td>
+                        <td>${t.critical ? '⚠️ Yes' : 'No'}</td>
+                        <td>${t.lock_enabled ? '🔐 Enabled' : '🔓 Disabled'}</td>
+                        <td>${lastRun}</td>
+                        <td>${nextRun}</td>
+                        <td style="text-align: right;">
+                            <button class="btn-table" onclick="triggerJob('${t.name}')">⚡ Trigger</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function triggerJob(jobName) {
+            try {
+                const ok = await apiPost('/actuator/shedlock/trigger', { jobName: jobName });
+                if (ok) {
+                    alert(`Job '${jobName}' triggered manually.`);
+                    setTimeout(loadTasks, 500);
+                }
+            } catch (err) {
+                alert(`Failed to trigger job: ${err}`);
+            }
+        }
+
+        async function loadDLQ() {
+            try {
+                const list = await apiGet('/actuator/dlq');
+                const tbody = document.getElementById('dlq-table-body');
+                tbody.innerHTML = '';
+
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-secondary" style="text-align:center;">Dead Letter Queue is empty.</td></tr>`;
+                    return;
+                }
+
+                list.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.id}</td>
+                        <td><strong>${item.event_name}</strong></td>
+                        <td><span style="font-size:0.8rem">${item.listener_name || 'Default'}</span></td>
+                        <td><span style="font-size:0.8rem; color:var(--danger-text)">${item.error}</span></td>
+                        <td><pre>${item.payload}</pre></td>
+                        <td style="text-align: center;">${item.retries}</td>
+                        <td style="text-align: right;">
+                            <div style="display:flex; gap:0.4rem; justify-content: flex-end;">
+                                <button class="btn-table" onclick="retryDLQ(${item.id})">Retry</button>
+                                <button class="btn-table btn-table-danger" onclick="purgeDLQ(${item.id})">Purge</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function retryDLQ(id) {
+            try {
+                const ok = await apiPost(`/actuator/dlq/retry?id=${id}`);
+                if (ok) {
+                    alert('Event successfully queued back to EventBus!');
+                    loadDLQ();
+                }
+            } catch (err) {
+                alert(`Failed to retry event: ${err}`);
+            }
+        }
+
+        async function purgeDLQ(id) {
+            if (!confirm('Are you sure you want to delete this failed event?')) return;
+            try {
+                const ok = await apiPost(`/actuator/dlq/purge?id=${id}`);
+                if (ok) {
+                    loadDLQ();
+                }
+            } catch (err) {
+                alert(`Failed to purge event: ${err}`);
+            }
+        }
+
+        async function purgeAllDLQ() {
+            if (!confirm('Are you sure you want to PURGE ALL failed events in the DLQ? This action is irreversible.')) return;
+            try {
+                const ok = await apiPost('/actuator/dlq/purge');
+                if (ok) {
+                    loadDLQ();
+                }
+            } catch (err) {
+                alert(`Failed to purge DLQ: ${err}`);
+            }
+        }
+
+        async function loadBeans() {
+            try {
+                allBeans = await apiGet('/actuator/beans');
+                filterBeans();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function filterBeans() {
+            const query = document.getElementById('bean-search').value.toLowerCase();
+            const tbody = document.getElementById('beans-table-body');
+            tbody.innerHTML = '';
+
+            const filtered = allBeans.filter(b => b.name.toLowerCase().includes(query) || b.type.toLowerCase().includes(query));
+            filtered.forEach(b => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${b.name}</strong></td>
+                    <td><code style="font-family:'JetBrains Mono'; font-size:0.8rem">${b.type}</code></td>
+                    <td><span class="logo-badge" style="font-size:0.7rem; border-color:var(--text-secondary); color:var(--text-secondary)">${b.scope}</span></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function loadEnv() {
+            try {
+                const data = await apiGet('/actuator/env');
+                allEnv = [];
+                for (const prefix in data) {
+                    const block = data[prefix];
+                    flattenEnv(prefix, block);
+                }
+                filterEnv();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function flattenEnv(prefix, obj) {
+            if (obj === null) return;
+            if (typeof obj !== 'object') {
+                allEnv.push({ key: prefix, value: obj });
+                return;
+            }
+            for (const key in obj) {
+                const val = obj[key];
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                if (typeof val === 'object' && val !== null) {
+                    flattenEnv(fullKey, val);
+                } else {
+                    allEnv.push({ key: fullKey, value: val });
+                }
+            }
+        }
+
+        function filterEnv() {
+            const query = document.getElementById('env-search').value.toLowerCase();
+            const tbody = document.getElementById('env-table-body');
+            tbody.innerHTML = '';
+
+            const filtered = allEnv.filter(e => e.key.toLowerCase().includes(query) || String(e.value).toLowerCase().includes(query));
+            filtered.forEach(e => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><code style="font-family:'JetBrains Mono'; font-size:0.8rem">${e.key}</code></td>
+                    <td class="text-secondary"><code style="font-family:'JetBrains Mono'; font-size:0.8rem; color:#f8fafc">${e.value}</code></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function loadThreadDump() {
+            const container = document.getElementById('threaddump-container');
+            container.textContent = 'Loading stack...';
+            try {
+                const res = await fetch('/actuator/threaddump');
+                const text = await res.text();
+                container.textContent = text;
+            } catch (err) {
+                container.textContent = `Error loading stack trace: ${err}`;
+            }
+        }
+
+        // Init
+        document.getElementById('sys-cores').textContent = navigator.hardwareConcurrency || '---';
+        
+        // Handle hash navigation on page load
+        const initialTab = window.location.hash ? window.location.hash.substring(1) : 'tab-dashboard';
+        if (document.getElementById(initialTab)) {
+            switchTab(initialTab);
+        }
+        
+        refreshAll();
+    </script>
+</body>
+</html>

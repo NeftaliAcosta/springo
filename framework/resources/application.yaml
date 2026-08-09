@@ -1,0 +1,15 @@
+server:
+    port: 0
+    name: "SprinGo Test"
+spring:
+    datasource:
+        driver: "sqlite"
+        url: "file:mem_bootstrap?mode=memory&cache=shared"
+        auto-migrate: true
+    scheduler:
+        enabled: true
+        jobs:
+            AuthTokenJob:
+                enabled: true
+                run-on-startup: true
+                critical: true

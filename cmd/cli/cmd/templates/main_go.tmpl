@@ -1,0 +1,14 @@
+package main
+
+import (
+	"{{.FrameworkModule}}/framework"
+	_ "{{.ModuleName}}/internal/application/service"
+	_ "{{.ModuleName}}/internal/infrastructure/input/rest"
+	_ "{{.ModuleName}}/internal/infrastructure/output/persistence"
+	_ "{{.ModuleName}}/resources/db/migration"
+)
+
+func main() {
+	// Bootstrap and start the SprinGo Framework Core.
+	framework.Bootstrap(framework.Options{}).Start()
+}

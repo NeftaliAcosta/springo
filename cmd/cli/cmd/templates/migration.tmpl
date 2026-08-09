@@ -1,0 +1,20 @@
+package migration
+
+import (
+	"{{.FrameworkModule}}/framework/database"
+	"{{.ModuleName}}/internal/infrastructure/output/persistence"
+
+	"gorm.io/gorm"
+)
+
+func init() {
+	database.RegisterMigration(database.Migration{
+		Name: "20260614_000001_create_users_table",
+		Up: func(dbConn *gorm.DB) error {
+			return dbConn.AutoMigrate(&persistence.UserEntity{})
+		},
+		Down: func(dbConn *gorm.DB) error {
+			return dbConn.Migrator().DropTable(&persistence.UserEntity{})
+		},
+	})
+}

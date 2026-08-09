@@ -1,0 +1,52 @@
+package persistence
+
+import (
+	"context"
+	"{{.FrameworkModule}}/framework/data"
+	"{{.FrameworkModule}}/framework/ioc"
+	"{{.ModuleName}}/internal/application/port/output"
+	"{{.ModuleName}}/internal/domain/model"
+
+	"gorm.io/gorm"
+)
+
+type userRepositoryAdapter struct {
+	data.BaseRepository[UserEntity]
+}
+
+func init() {
+	ioc.GetContainer().RegisterRepositoryFactory("UserRepository", func(dbConn *gorm.DB) interface{} {
+		return &userRepositoryAdapter{
+			BaseRepository: data.NewBaseRepository[UserEntity](dbConn),
+		}
+	})
+}
+
+func (a *userRepositoryAdapter) Save(ctx context.Context, user *model.User) error {
+	entity := UserEntity{
+		ID:       user.ID,
+		Username: user.Username,
+		Email:    user.Email,
+		Password: user.Password,
+	}
+	if err := a.BaseRepository.Save(ctx, &entity); err != nil {
+		return err
+	}
+	user.ID = entity.ID
+	return nil
+}
+
+func (a *userRepositoryAdapter) FindByID(ctx context.Context, id uint) (*model.User, error) {
+	entityPtr, err := a.BaseRepository.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &model.User{
+		ID:       entityPtr.ID,
+		Username: entityPtr.Username,
+		Email:    entityPtr.Email,
+		Password: entityPtr.Password,
+	}, nil
+}
+
+var _ output.UserPersistencePort = (*userRepositoryAdapter)(nil)

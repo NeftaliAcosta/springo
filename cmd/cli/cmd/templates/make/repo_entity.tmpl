@@ -1,0 +1,36 @@
+package persistence
+
+import (
+	"time"
+
+	"{{.ModulePath}}/internal/domain/model"
+	"gorm.io/gorm"
+)
+
+type {{.StructName}}Entity struct {
+	ID        uint      `gorm:"primarykey"`
+	Name      string    `gorm:"size:255;not null"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+}
+
+func ({{.StructName}}Entity) TableName() string {
+	return "{{.PluralName}}"
+}
+
+func (e *{{.StructName}}Entity) ToDomain() model.{{.StructName}} {
+	return model.{{.StructName}}{
+		ID:        e.ID,
+		Name:      e.Name,
+		CreatedAt: e.CreatedAt,
+		UpdatedAt: e.UpdatedAt,
+	}
+}
+
+func From{{.StructName}}Domain(m model.{{.StructName}}) {{.StructName}}Entity {
+	return {{.StructName}}Entity{
+		ID:   m.ID,
+		Name: m.Name,
+	}
+}
