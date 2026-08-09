@@ -1,176 +1,163 @@
 # SprinGo Framework 🚀
 
-SprinGo is a high-performance, opinionated enterprise framework for Go, specifically designed to provide a familiar environment for **Spring Boot (Java)** developers. It follows a clean architecture that strictly separates the framework's engine (`framework/`) from application code.
+<p align="center">
+  <b>High-performance, opinionated Go framework for Spring Boot developers.</b>
+</p>
 
-> **Release status:** `v1.0.0-rc1` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+<p align="center">
+  <a href="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml"><img src="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
+  <a href="https://pkg.go.dev/github.com/NeftaliAcosta/springo"><img src="https://pkg.go.dev/badge/github.com/NeftaliAcosta/springo.svg" alt="Go Reference"></a>
+  <a href="https://github.com/NeftaliAcosta/springo/releases"><img src="https://img.shields.io/github/v/release/NeftaliAcosta/springo?include_prereleases&color=blue" alt="Release"></a>
+  <a href="https://goreportcard.com/report/github.com/NeftaliAcosta/springo"><img src="https://goreportcard.com/badge/github.com/NeftaliAcosta/springo" alt="Go Report Card"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
-### Requirements
+<p align="center">
+  <img src="https://img.shields.io/github/stars/NeftaliAcosta/springo?style=social" alt="Stars">
+  <img src="https://img.shields.io/github/forks/NeftaliAcosta/springo?style=social" alt="Forks">
+  <img src="https://img.shields.io/github/issues/NeftaliAcosta/springo" alt="Issues">
+  <img src="https://img.shields.io/github/contributors/NeftaliAcosta/springo" alt="Contributors">
+</p>
 
-- Go `1.26.5` or newer compatible version.
-- Git, when using the CLI's automatic repository initialization.
+---
 
-## 🏗️ Framework & Repo Architecture
+> ⚠️ **Release status:** `v1.0.0-rc1` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+
+---
+
+## ⚡ Quick Start
+
+### 1. Install SprinGo CLI
+
+```bash
+go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc1
+```
+
+### 2. Scaffold a New Enterprise Service
+
+```bash
+springo new my-service
+cd my-service
+go run cmd/app/main.go
+```
+
+Your API is now live at `http://localhost:8080` with Actuator Dashboard at `http://localhost:8080/actuator/dashboard`! 🎉
+
+---
+
+## 🚀 Key Features
+
+| Category | Feature | Description |
+| :--- | :--- | :--- |
+| 🛠️ **CLI Tooling** | **Code Generators & Scaffolding** | `springo new` and `springo make` for instant Hexagonal Architecture components. |
+| 🎛️ **Management** | **Spring-style Actuator** | Embedded Glassmorphic UI Dashboard for Health, Goroutine Dumps, Beans & DLQ. |
+| 🧩 **Core Engine** | **IoC & Auto-Wiring** | Dependency injection container with reflection & tag-based field autowiring (`spring:"beanName"`). |
+| 🔒 **Security** | **Enterprise JWT & CSRF** | Support for HS256, RS256 (Keycloak/Auth0 JWKS), OWASP Security Headers & CSRF. |
+| ⚡ **Database** | **GORM & ShedLock** | Declarative transactions with `REQUIRED` propagation and cluster-wide cron locking. |
+| 📡 **Messaging** | **Event Bus & Outbox/DLQ** | Domain Pub/Sub with Outbox buffer, automatic retries, and Dead Letter Queue management. |
+| ⚙️ **Config** | **Profiles & Validation** | Fail-fast property validation with `application-{profile}.yaml` environments. |
+
+---
+
+## 🏗️ Architecture
+
+SprinGo enforces a **Flattened Professional Hexagonal Architecture** with a dedicated **Kernel**:
 
 ```text
 springo/
 ├── framework/                 # 🛠️ THE KERNEL (SprinGo Engine Library)
 │   ├── app.go
 │   ├── runner.go
-│   ├── cache/
-│   ├── config/
-│   ├── data/
-│   ├── database/
-│   ├── errors/
-│   ├── event/
-│   ├── ioc/
-│   ├── logging/
-│   ├── scheduler/
-│   ├── security/
-│   ├── test/
-│   └── web/
+│   ├── cache/                 # Multi-provider cache abstraction
+│   ├── config/                # YAML Profile loader & validation
+│   ├── database/              # GORM datasource & ShedLock migrator
+│   ├── event/                 # Pub/Sub EventBus, Outbox & DLQ
+│   ├── ioc/                   # Dependency Injection Container
+│   ├── scheduler/             # Cron manager with ShedLock
+│   ├── security/              # JWT & LDAP providers
+│   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc1)
-│       ├── main.go
-│       └── cmd/               # Code generators & scaffolding templates
-├── demo-api/                  # 🚀 Reference Application (Separated Demo API)
-│   ├── cmd/app/
-│   ├── internal/
-│   └── resources/
-├── LICENSE                    # MIT License
+├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
 
-## 🚀 Key Features
-
-- **SprinGo CLI & Code Generators**: Command line tool (`springo`) for scaffolding hexagonal architecture projects (`springo new`), database migrations, and generating components (`springo make model|dto|repository|service|controller|migration`).
-- **Dynamic Actuator Health**: Intelligent monitoring that automatically discovers all database connections and collects system metrics (uptime, memory, platform).
-- **One-Line Bootstrap**: Start your entire engine (Config, IoC, Router, Middleware) with a single call to `framework.Bootstrap()`.
-- **Library-Style Kernel**: The framework logic lives in `/framework` at the root, acting as a standalone, decoupled library.
-- **Magic Dispatcher & @Valid**: Automatic JSON decoding and **DTO Validation** (@Valid equivalent) using tags.
-- **Global Error Handler**: Centralized exception management (style @ControllerAdvice).
-- **Standardized Responses**: All API outputs are automatically wrapped in a consistent JSON structure.
-- **CORS Configurable**: Robust CORS management via `application.yaml` (origins, methods, headers, credentials).
-- **JWT Security & Boundary Whitelisting**: Boundary-safe path whitelisting with JWT validation and fail-fast configuration checks on startup (Properties Validation).
-- **Transactional Support & Propagation**: Declarative-style transactions with GORM supporting `REQUIRED` propagation to join nested scopes naturally.
-- **Domain Event Bus & Scheduled Jobs**: Pub/Sub events with Outbox buffer/DLQ support and CRON scheduled background tasks.
-- **Full Auto-Wiring & IoC**: Automatic dependency management through a centralized container.
-- **Component Scanning**: Components register themselves automatically using Go's `init()` functions and `RegistrationHooks`.
-- **Dynamic Port Discovery**: Automatically finds an open port starting from 8080.
-- **Configuration Profiles**: Strict support for `application-{profile}.yaml` environments.
-
 ---
 
-## 🛠️ SprinGo CLI (v1.0.0-rc1)
+## 🛠️ SprinGo CLI (`springo`)
 
-SprinGo includes an official Command Line Interface (`springo`) designed to accelerate application creation, code generation, migration execution, and route inspection.
+The `springo` CLI automates daily development workflows:
 
-### Installation
+### Scaffolding & Code Generation
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc1
-# Or build locally from repository root:
-go build -o springo cmd/cli/main.go
+# 1. Create a new microservice
+springo new billing-service
+
+# 2. Generate Hexagonal domain components
+springo make model Invoice
+springo make dto Invoice
+springo make repository Invoice
+springo make service Invoice
+springo make controller Invoice
+springo make migration CreateInvoicesTable
 ```
 
-### 1. Scaffolding New Projects (`springo new`)
-
-Generates a fully structured professional Hexagonal Architecture project:
+### Database Migrations & Route Discovery
 
 ```bash
-springo new my-app
-cd my-app
-go mod tidy
-go run cmd/app/main.go
-```
-
-Options:
-- `--local`: Link local development framework module via `replace` directive.
-- `--skip-git`: Skip initial `git init` setup.
-
-### 2. Code Generators (`springo make`)
-
-Generate hexagonal components instantly following SprinGo's enterprise naming conventions:
-
-```bash
-# Generate Domain Model
-springo make model Product
-
-# Generate Request & Response DTOs
-springo make dto Product
-
-# Generate Persistence Port, Entity (GORM) & Repository Adapter
-springo make repository Product
-
-# Generate Use Case Port & Application Service implementation
-springo make service Product
-
-# Generate REST Controller (Chi router integration)
-springo make controller Product
-
-# Generate Database Migration file
-springo make migration CreateProductsTable
-```
-
-### 3. Database Migrations (`springo migrate`)
-
-Execute Flyway-style SQL and Go migrations with automatic distributed cluster locking (`ShedLock`):
-
-```bash
-# Apply pending migrations
+# Migration controls
 springo migrate
-
-# Check migration execution status
 springo migrate status
-
-# Roll back the last N batches (default 1)
 springo migrate rollback --steps=1
 
-# Reset all applied migrations
-springo migrate reset
-
-# Refresh database (reset + re-run all migrations)
-springo migrate refresh
-```
-
-### 4. Route Discovery (`springo routes`)
-
-Inspect all registered REST endpoints of your application directly from the terminal without side-effects:
-
-```bash
+# Terminal route discovery
 springo routes
 ```
 
 ---
 
-## ⚙️ Configuration & Profiles
+## 📊 Actuator Dashboard
 
-SprinGo strongly follows the **Convention over Configuration** principle. Configuration files are **completely optional**. If omitted, the framework falls back to sensible enterprise defaults without crashing.
+SprinGo includes an embedded, zero-dependency Web Console inspired by **Spring Boot Admin**:
 
-SprinGo uses a profile system loaded via `SPRINGO_PROFILES_ACTIVE`:
+- **Health Engine**: Automatic discovery and status checks for all GORM datasources & Redis connections.
+- **Goroutine Dump**: Real-time stack trace inspection for concurrency debugging.
+- **Bean Directory**: Full visibility into active IoC container definitions.
+- **Dead Letter Queue**: Web interface to inspect, retry (re-dispatch), or purge failed domain events.
 
-| Profile | Variable | File Loaded |
-| :--- | :--- | :--- |
-| **Default** | (empty) | `resources/application.yaml` |
-| **Dev** | `dev` | `resources/application-dev.yaml` |
-| **Prod** | `prod` | `resources/application-prod.yaml` |
+Access it locally at: `http://localhost:8080/actuator/dashboard`
 
 ---
 
-## 🔐 Security & Management
+## ⚙️ Configuration & Profiles
 
-- **JWT Auth**: Supports HMAC-SHA256 (HS256) symmetric keys and RS256 RSA/JWKS asymmetric keys (Keycloak / Auth0 / Okta).
-- **Actuator Console**: Web UI at `/actuator/dashboard` for monitoring health, metrics, goroutine dumps, beans, env properties, ShedLock jobs, and DLQ retries.
-- **CSRF & Security Headers**: Built-in Double-Submit Cookie CSRF protection and OWASP security headers.
-
-### Demo application safety
-
-`demo-api/` is an executable reference application and a separate Go module. Its JWT secret and login credentials are intentionally public development examples. **Do not deploy the demo or reuse those credentials in production.** The framework rejects its known development JWT secret when the active profile is `prod` or `production`.
-
-Because it is a nested module, validate it independently from the repository root:
+Configuration is **100% optional**. If omitted, SprinGo falls back to sensible enterprise defaults. Load specific profile files via `SPRINGO_PROFILES_ACTIVE`:
 
 ```bash
-(cd demo-api && go test -race ./...)
+# Development profile (loads resources/application-dev.yaml)
+SPRINGO_PROFILES_ACTIVE=dev go run cmd/app/main.go
+
+# Production profile (loads resources/application-prod.yaml)
+SPRINGO_PROFILES_ACTIVE=prod ./main
 ```
+
+---
+
+## 🔐 Security & Safety
+
+- **Production Hardening**: Production profile automatically enforces 256-bit JWT secret entropy.
+- **Demo Safety**: `demo-api/` is a separate test module. Its development JWT secrets are rejected automatically in `prod` profiles.
+
+---
+
+## 🤝 Contributors
+
+Thank you to all the people who contribute to **SprinGo Framework**!
+
+<a href="https://github.com/NeftaliAcosta/springo/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=NeftaliAcosta/springo" alt="Contributors" />
+</a>
 
 ---
 
