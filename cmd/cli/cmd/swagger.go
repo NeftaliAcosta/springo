@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -36,9 +40,11 @@ var (
 )
 
 func swaggerArgs(mainFile string, quiet bool) []string {
+	generalInfo, searchDirs := swaggerSearchConfig(mainFile)
 	args := []string{
 		"init",
-		"-g", mainFile,
+		"-g", generalInfo,
+		"-d", searchDirs,
 		"--parseInternal",
 		"--pdl", "1",
 		"--parseGoList=false",
@@ -47,6 +53,41 @@ func swaggerArgs(mainFile string, quiet bool) []string {
 		args = append(args, "-q")
 	}
 	return args
+}
+
+func swaggerSearchConfig(mainFile string) (generalInfo, searchDirs string) {
+	cleanMainFile := filepath.Clean(mainFile)
+	mainDir := filepath.Dir(cleanMainFile)
+	generalInfo = filepath.Base(cleanMainFile)
+	if mainDir == "." {
+		return generalInfo, "."
+	}
+	dirs := []string{mainDir}
+	dirs = append(dirs, collectGoPackageDirs("internal")...)
+	return generalInfo, strings.Join(dirs, ",")
+}
+
+func collectGoPackageDirs(root string) []string {
+	dirs := map[string]struct{}{}
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		dirs[filepath.Dir(path)] = struct{}{}
+		return nil
+	})
+	result := make([]string, 0, len(dirs))
+	for dir := range dirs {
+		result = append(result, dir)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func init() {
