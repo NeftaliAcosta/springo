@@ -1,5 +1,7 @@
 server:
     port: 8080
+    api:
+        base-path: "/api/v1"
     name: "SprinGo (Default Profile)"
     cors:
         allowed-origins: ["http://localhost:3000", "http://localhost:4200"]

@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc2` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc3` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc2
+go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc3
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -77,7 +77,7 @@ springo/
 │   ├── security/              # JWT & LDAP providers
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
-│   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc2)
+│   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc3)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -133,6 +133,16 @@ Access it locally at: `http://localhost:8080/actuator/dashboard`
 ## ⚙️ Configuration & Profiles
 
 Configuration is **100% optional**. If omitted, SprinGo falls back to sensible enterprise defaults. Load specific profile files via `SPRINGO_PROFILES_ACTIVE`:
+
+Application routes use `/api/v1` by default. Override the prefix without changing the kernel:
+
+```yaml
+server:
+  api:
+    base-path: /platform/v2
+```
+
+Use `/` to expose application routes without a common prefix. The value must begin with `/`; trailing slashes are normalized. Keep the Swagger `@BasePath` annotation and JWT `public-paths` synchronized with a custom prefix.
 
 ```bash
 # Development profile (loads resources/application-dev.yaml)

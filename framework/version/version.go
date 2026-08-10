@@ -5,5 +5,5 @@ const (
 	// Name is the canonical product and framework name.
 	Name = "SprinGo"
 	// Current is the semantic version shared by the framework and CLI.
-	Current = "v1.0.0-rc2"
+	Current = "v1.0.0-rc3"
 )

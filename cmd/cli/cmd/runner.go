@@ -240,11 +240,21 @@ import (
 	"fmt"
 	"os"
 	"text/tabwriter"
+	"%s/framework/config"
 	"%s/framework/web"
 	_ "%s/internal/infrastructure/input/rest"
 )
 
 func main() {
+	loader := config.NewConfigLoader().WithBaseDir("resources")
+	if err := loader.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load application configuration: %%v\n", err)
+		os.Exit(1)
+	}
+	if err := config.InitializeProperties(loader); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize application properties: %%v\n", err)
+		os.Exit(1)
+	}
 	routes := web.GetRegisteredRoutes()
 	if len(routes) == 0 {
 		fmt.Println("ℹ️ No registered routes found.")
@@ -258,7 +268,7 @@ func main() {
 	}
 	w.Flush()
 }
-`, frameworkModule, modulePath)
+`, frameworkModule, frameworkModule, modulePath)
 	}
 
 	formattedCode, err := format.Source([]byte(rawCode))

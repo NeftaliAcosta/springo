@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -53,14 +55,37 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 
 type WebServerProperties struct {
 	Port              int           `yaml:"port"`
+	API               APIProperties `yaml:"api"`
 	ReadHeaderTimeout time.Duration `yaml:"read-header-timeout"`
 	ReadTimeout       time.Duration `yaml:"read-timeout"`
 	WriteTimeout      time.Duration `yaml:"write-timeout"`
 	IdleTimeout       time.Duration `yaml:"idle-timeout"`
 }
 
+// APIProperties controls the common prefix applied to application routes.
+type APIProperties struct {
+	BasePath string `yaml:"base-path"`
+}
+
+// Validate normalizes and validates the application route prefix.
+func (p *WebServerProperties) Validate() error {
+	basePath := strings.TrimSpace(p.API.BasePath)
+	if basePath == "" {
+		basePath = DefaultAPIBasePath
+	}
+	if !strings.HasPrefix(basePath, "/") {
+		return fmt.Errorf("server.api.base-path must start with '/'")
+	}
+	if strings.ContainsAny(basePath, "?#") {
+		return fmt.Errorf("server.api.base-path cannot contain query or fragment characters")
+	}
+	p.API.BasePath = path.Clean(basePath)
+	return nil
+}
+
 func init() {
 	config.RegisterProperties("server", &WebServerProperties{
+		API:               APIProperties{BasePath: DefaultAPIBasePath},
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

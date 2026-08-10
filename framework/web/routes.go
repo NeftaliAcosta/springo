@@ -4,8 +4,12 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/go-chi/chi/v5"
 )
+
+// DefaultAPIBasePath preserves SprinGo's original application route prefix.
+const DefaultAPIBasePath = "/api/v1"
 
 // RegistrationHook is a function that takes a router to register endpoints
 type RegistrationHook func(r chi.Router)
@@ -34,11 +38,29 @@ func getHooksSnapshot() []RegistrationHook {
 // RegisterAllRoutes applies all registered hooks to the main router
 func RegisterAllRoutes(mainRouter chi.Router) {
 	hooks := getHooksSnapshot()
-	mainRouter.Route("/api/v1", func(r chi.Router) {
+	registerRoutes(mainRouter, APIBasePath(), hooks)
+}
+
+// APIBasePath returns the normalized prefix configured at server.api.base-path.
+func APIBasePath() string {
+	props := config.Get[WebServerProperties]()
+	if props == nil || props.API.BasePath == "" {
+		return DefaultAPIBasePath
+	}
+	return props.API.BasePath
+}
+
+func registerRoutes(mainRouter chi.Router, basePath string, hooks []RegistrationHook) {
+	apply := func(r chi.Router) {
 		for _, hook := range hooks {
 			hook(r)
 		}
-	})
+	}
+	if basePath == "/" {
+		apply(mainRouter)
+		return
+	}
+	mainRouter.Route(basePath, apply)
 }
 
 // RouteInfo holds metadata about a registered route endpoint
