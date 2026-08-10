@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc3` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc4` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc3
+go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc4
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -77,7 +77,7 @@ springo/
 │   ├── security/              # JWT & LDAP providers
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
-│   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc3)
+│   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc4)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -113,7 +113,12 @@ springo migrate rollback --steps=1
 
 # Terminal route discovery
 springo routes
+
+# Regenerate OpenAPI/Swagger documentation when controllers or DTOs change
+springo swagger
 ```
+
+`springo run` keeps hot reload fast by compiling only the application. Swagger generation is intentionally explicit because dependency-aware documentation analysis is considerably slower than an incremental Go build. Use `springo swagger --quiet` for silent generation or `springo swagger --main path/to/main.go` for a custom entry point.
 
 ---
 
