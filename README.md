@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc4` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc5` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/cli@v1.0.0-rc4
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc5
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -77,7 +77,8 @@ springo/
 │   ├── security/              # JWT & LDAP providers
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
-│   └── cli/                   # 🛠️ SprinGo CLI (v1.0.0-rc4)
+│   ├── cli/                   # 🛠️ SprinGo CLI implementation
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc5)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```

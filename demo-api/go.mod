@@ -3,7 +3,7 @@ module github.com/NeftaliAcosta/springo/demo-api
 go 1.26.5
 
 require (
-	github.com/NeftaliAcosta/springo v1.0.0-rc4
+	github.com/NeftaliAcosta/springo v1.0.0-rc5
 	github.com/go-chi/chi/v5 v5.3.0
 	gorm.io/gorm v1.31.1
 )
