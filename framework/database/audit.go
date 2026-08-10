@@ -171,6 +171,12 @@ func createAuditTable(db *gorm.DB, model interface{}, tableName string) error {
 }
 
 func formatColumnType(col gorm.ColumnType) string {
+	// ColumnType preserves dialect-specific definitions such as MySQL ENUM
+	// values. DatabaseTypeName only returns "enum", which produces invalid DDL.
+	if fullType, ok := col.ColumnType(); ok && strings.TrimSpace(fullType) != "" {
+		return fullType
+	}
+
 	dbType := col.DatabaseTypeName()
 	dbTypeLower := strings.ToLower(dbType)
 

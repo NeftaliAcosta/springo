@@ -44,6 +44,7 @@ func TestMakeScaffoldingInTempDir(t *testing.T) {
 
 	// Verify essential files exist
 	expectedFiles := []string{
+		".air.toml",
 		"go.mod",
 		"cmd/app/main.go",
 		"resources/application.yaml",

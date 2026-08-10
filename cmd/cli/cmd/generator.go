@@ -62,6 +62,7 @@ func GenerateProject(config ProjectConfig) error {
 	}
 
 	fileMap := map[string]string{
+		"templates/air_toml.tmpl":                ".air.toml",
 		"templates/go_mod.tmpl":                  "go.mod",
 		"templates/main_go.tmpl":                 "cmd/app/main.go",
 		"templates/application_yaml.tmpl":        "resources/application.yaml",
