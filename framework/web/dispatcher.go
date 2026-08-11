@@ -6,6 +6,7 @@ import (
 	"github.com/NeftaliAcosta/springo/framework/database"
 	"github.com/NeftaliAcosta/springo/framework/errors"
 	"github.com/NeftaliAcosta/springo/framework/security"
+	"mime"
 	"net/http"
 	"reflect"
 )
@@ -84,6 +85,7 @@ func Dispatch(fn any, opts ...any) http.HandlerFunc {
 	cfg := applyOptions(opts)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		defer cleanupMultipartRequest(r)
 		if !checkAuthorization(w, r, cfg.roles) {
 			return
 		}
@@ -218,10 +220,19 @@ func bindAndValidateDTO(w http.ResponseWriter, r *http.Request, paramType reflec
 
 	structVal := reflect.New(baseType)
 
-	// Decode JSON body for non-GET requests
-	if r.Method != http.MethodGet && r.ContentLength > 0 {
-		if !DecodeJSON(w, r, structVal.Interface()) {
-			return reflect.Value{}, false
+	// Decode the body according to its media type. Requests without an explicit
+	// Content-Type preserve the historical JSON fallback.
+	if r.Method != http.MethodGet && r.ContentLength != 0 {
+		mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if mediaType == "multipart/form-data" {
+			if err := BindMultipartRequest(w, r, structVal.Interface()); err != nil {
+				HandleError(w, r, err)
+				return reflect.Value{}, false
+			}
+		} else {
+			if !DecodeJSON(w, r, structVal.Interface()) {
+				return reflect.Value{}, false
+			}
 		}
 	}
 
@@ -241,6 +252,12 @@ func bindAndValidateDTO(w http.ResponseWriter, r *http.Request, paramType reflec
 		return structVal, true
 	}
 	return structVal.Elem(), true
+}
+
+func cleanupMultipartRequest(r *http.Request) {
+	if r.MultipartForm != nil {
+		_ = r.MultipartForm.RemoveAll()
+	}
 }
 
 // ─── Execute & Respond ────────────────────────────────────────────────────────

@@ -54,12 +54,23 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 }
 
 type WebServerProperties struct {
-	Port              int           `yaml:"port"`
-	API               APIProperties `yaml:"api"`
-	ReadHeaderTimeout time.Duration `yaml:"read-header-timeout"`
-	ReadTimeout       time.Duration `yaml:"read-timeout"`
-	WriteTimeout      time.Duration `yaml:"write-timeout"`
-	IdleTimeout       time.Duration `yaml:"idle-timeout"`
+	Port              int                 `yaml:"port"`
+	API               APIProperties       `yaml:"api"`
+	Multipart         MultipartProperties `yaml:"multipart"`
+	ReadHeaderTimeout time.Duration       `yaml:"read-header-timeout"`
+	ReadTimeout       time.Duration       `yaml:"read-timeout"`
+	WriteTimeout      time.Duration       `yaml:"write-timeout"`
+	IdleTimeout       time.Duration       `yaml:"idle-timeout"`
+}
+
+// MultipartProperties controls multipart/form-data request processing.
+// File contents above MemoryThreshold are transparently spooled to temporary
+// files by net/http and removed automatically after the controller returns.
+type MultipartProperties struct {
+	Enabled         bool  `yaml:"enabled"`
+	MaxFileSize     int64 `yaml:"max-file-size"`
+	MaxRequestSize  int64 `yaml:"max-request-size"`
+	MemoryThreshold int64 `yaml:"memory-threshold"`
 }
 
 // APIProperties controls the common prefix applied to application routes.
@@ -80,12 +91,30 @@ func (p *WebServerProperties) Validate() error {
 		return fmt.Errorf("server.api.base-path cannot contain query or fragment characters")
 	}
 	p.API.BasePath = path.Clean(basePath)
+	if !p.Multipart.Enabled && p.Multipart.MaxFileSize == 0 && p.Multipart.MaxRequestSize == 0 && p.Multipart.MemoryThreshold == 0 {
+		return nil
+	}
+	if p.Multipart.MaxFileSize <= 0 {
+		return fmt.Errorf("server.multipart.max-file-size must be greater than zero")
+	}
+	if p.Multipart.MaxRequestSize <= 0 {
+		return fmt.Errorf("server.multipart.max-request-size must be greater than zero")
+	}
+	if p.Multipart.MaxFileSize > p.Multipart.MaxRequestSize {
+		return fmt.Errorf("server.multipart.max-file-size cannot exceed max-request-size")
+	}
+	if p.Multipart.MemoryThreshold <= 0 || p.Multipart.MemoryThreshold > p.Multipart.MaxRequestSize {
+		return fmt.Errorf("server.multipart.memory-threshold must be greater than zero and cannot exceed max-request-size")
+	}
 	return nil
 }
 
 func init() {
 	config.RegisterProperties("server", &WebServerProperties{
-		API:               APIProperties{BasePath: DefaultAPIBasePath},
+		API: APIProperties{BasePath: DefaultAPIBasePath},
+		Multipart: MultipartProperties{
+			Enabled: true, MaxFileSize: 100 << 20, MaxRequestSize: 110 << 20, MemoryThreshold: 8 << 20,
+		},
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

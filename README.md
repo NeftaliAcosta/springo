@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc6` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc7` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc6
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc7
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -52,6 +52,7 @@ Your API is now live at `http://localhost:8080` with Actuator Dashboard at `http
 | 🛠️ **CLI Tooling** | **Code Generators & Scaffolding** | `springo new` and `springo make` for instant Hexagonal Architecture components. |
 | 🎛️ **Management** | **Spring-style Actuator** | Embedded Glassmorphic UI Dashboard for Health, Goroutine Dumps, Beans & DLQ. |
 | 🧩 **Core Engine** | **IoC & Auto-Wiring** | Dependency injection container with reflection & tag-based field autowiring (`spring:"beanName"`). |
+| 📤 **Web Binding** | **JSON & Multipart DTOs** | Declarative request binding for JSON, path/query values and streamed multipart files with configurable limits. |
 | 🔒 **Security** | **Enterprise JWT & CSRF** | Support for HS256, RS256 (Keycloak/Auth0 JWKS), OWASP Security Headers & CSRF. |
 | ⚡ **Database** | **GORM & ShedLock** | Declarative transactions with `REQUIRED` propagation and cluster-wide cron locking. |
 | 📡 **Messaging** | **Event Bus & Outbox/DLQ** | Domain Pub/Sub with Outbox buffer, automatic retries, and Dead Letter Queue management. |
@@ -78,7 +79,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc6)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc7)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -149,6 +150,38 @@ server:
 ```
 
 Use `/` to expose application routes without a common prefix. The value must begin with `/`; trailing slashes are normalized. Keep the Swagger `@BasePath` annotation and JWT `public-paths` synchronized with a custom prefix.
+
+### Multipart file binding
+
+SprinGo binds `multipart/form-data` directly to request DTOs while preserving path and query binding:
+
+```go
+type UploadRequest struct {
+    ResourceUUID string             `path:"resource_uuid" validate:"required,uuid"`
+    Description  string             `form:"description"`
+    File         *web.MultipartFile `form:"file" validate:"required"`
+}
+
+func (c *ResourceController) upload(ctx context.Context, dto UploadRequest) (any, error) {
+    file, err := dto.File.Open()
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+    return c.service.Upload(ctx, dto.ResourceUUID, dto.File.Filename, file)
+}
+```
+
+Configure global upload limits in bytes. Content above `memory-threshold` is spooled to temporary storage and cleaned automatically after the controller returns:
+
+```yaml
+server:
+  multipart:
+    enabled: true
+    max-file-size: 104857600
+    max-request-size: 115343360
+    memory-threshold: 8388608
+```
 
 ```bash
 # Development profile (loads resources/application-dev.yaml)
