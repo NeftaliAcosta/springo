@@ -1,9 +1,8 @@
-package persistence
+package data
 
 import (
 	"time"
 
-	"{{.ModulePath}}/internal/domain/model"
 	"gorm.io/gorm"
 )
 
@@ -17,20 +16,4 @@ type {{.StructName}}Entity struct {
 
 func ({{.StructName}}Entity) TableName() string {
 	return "{{.PluralName}}"
-}
-
-func (e *{{.StructName}}Entity) ToDomain() model.{{.StructName}} {
-	return model.{{.StructName}}{
-		ID:        e.ID,
-		Name:      e.Name,
-		CreatedAt: e.CreatedAt,
-		UpdatedAt: e.UpdatedAt,
-	}
-}
-
-func From{{.StructName}}Domain(m model.{{.StructName}}) {{.StructName}}Entity {
-	return {{.StructName}}Entity{
-		ID:   m.ID,
-		Name: m.Name,
-	}
 }

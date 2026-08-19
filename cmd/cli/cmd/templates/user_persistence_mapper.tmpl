@@ -1,0 +1,24 @@
+package mapper
+
+import (
+	"{{.ModuleName}}/internal/domain/model"
+	"{{.ModuleName}}/internal/infrastructure/output/persistence/data"
+)
+
+func UserToDomain(entity data.UserEntity) model.User {
+	return model.User{
+		ID:       entity.ID,
+		Username: entity.Username,
+		Email:    entity.Email,
+		Password: entity.Password,
+	}
+}
+
+func UserToEntity(user model.User) data.UserEntity {
+	return data.UserEntity{
+		ID:       user.ID,
+		Username: user.Username,
+		Email:    user.Email,
+		Password: user.Password,
+	}
+}

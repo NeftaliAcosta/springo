@@ -2,33 +2,31 @@ package persistence
 
 import (
 	"context"
+
 	"{{.FrameworkModule}}/framework/data"
 	"{{.FrameworkModule}}/framework/ioc"
 	"{{.ModuleName}}/internal/application/port/output"
 	"{{.ModuleName}}/internal/domain/model"
+	persistenceData "{{.ModuleName}}/internal/infrastructure/output/persistence/data"
+	"{{.ModuleName}}/internal/infrastructure/output/persistence/mapper"
 
 	"gorm.io/gorm"
 )
 
 type userRepositoryAdapter struct {
-	data.BaseRepository[UserEntity]
+	data.BaseRepository[persistenceData.UserEntity]
 }
 
 func init() {
 	ioc.GetContainer().RegisterRepositoryFactory("UserRepository", func(dbConn *gorm.DB) interface{} {
 		return &userRepositoryAdapter{
-			BaseRepository: data.NewBaseRepository[UserEntity](dbConn),
+			BaseRepository: data.NewBaseRepository[persistenceData.UserEntity](dbConn),
 		}
 	})
 }
 
 func (a *userRepositoryAdapter) Save(ctx context.Context, user *model.User) error {
-	entity := UserEntity{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Password: user.Password,
-	}
+	entity := mapper.UserToEntity(*user)
 	if err := a.BaseRepository.Save(ctx, &entity); err != nil {
 		return err
 	}
@@ -41,12 +39,8 @@ func (a *userRepositoryAdapter) FindByID(ctx context.Context, id uint) (*model.U
 	if err != nil {
 		return nil, err
 	}
-	return &model.User{
-		ID:       entityPtr.ID,
-		Username: entityPtr.Username,
-		Email:    entityPtr.Email,
-		Password: entityPtr.Password,
-	}, nil
+	domain := mapper.UserToDomain(*entityPtr)
+	return &domain, nil
 }
 
 var _ output.UserPersistencePort = (*userRepositoryAdapter)(nil)

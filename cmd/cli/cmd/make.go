@@ -210,13 +210,24 @@ var makeRepoCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to render repo entity: %w", err)
 		}
-		targetEntity := filepath.Join("internal", "infrastructure", "output", "persistence", data.LowerName+"_entity.go")
+		targetEntity := filepath.Join("internal", "infrastructure", "output", "persistence", "data", data.LowerName+"_entity.go")
 		if err := writeGeneratedFile(targetEntity, contentEntity); err != nil {
 			return err
 		}
 		fmt.Printf("✅ Created GORM entity: %s\n", targetEntity)
 
-		// 3. Repository Adapter
+		// 3. Persistence Mapper
+		contentMapper, err := renderMakeTemplate("templates/make/repo_mapper.tmpl", data)
+		if err != nil {
+			return fmt.Errorf("failed to render repo mapper: %w", err)
+		}
+		targetMapper := filepath.Join("internal", "infrastructure", "output", "persistence", "mapper", data.LowerName+"_persistence_mapper.go")
+		if err := writeGeneratedFile(targetMapper, contentMapper); err != nil {
+			return err
+		}
+		fmt.Printf("✅ Created persistence mapper: %s\n", targetMapper)
+
+		// 4. Repository Adapter
 		contentAdapter, err := renderMakeTemplate("templates/make/repo_impl.tmpl", data)
 		if err != nil {
 			return fmt.Errorf("failed to render repo adapter: %w", err)

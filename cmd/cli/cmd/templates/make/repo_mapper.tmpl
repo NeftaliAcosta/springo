@@ -1,0 +1,22 @@
+package mapper
+
+import (
+	"{{.ModulePath}}/internal/domain/model"
+	"{{.ModulePath}}/internal/infrastructure/output/persistence/data"
+)
+
+func {{.StructName}}ToDomain(entity data.{{.StructName}}Entity) model.{{.StructName}} {
+	return model.{{.StructName}}{
+		ID:        entity.ID,
+		Name:      entity.Name,
+		CreatedAt: entity.CreatedAt,
+		UpdatedAt: entity.UpdatedAt,
+	}
+}
+
+func {{.StructName}}ToEntity(item model.{{.StructName}}) data.{{.StructName}}Entity {
+	return data.{{.StructName}}Entity{
+		ID:   item.ID,
+		Name: item.Name,
+	}
+}
