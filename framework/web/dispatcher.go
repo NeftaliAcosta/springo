@@ -17,6 +17,7 @@ import (
 type dispatchConfig struct {
 	roles            []string
 	validationGroups []interface{}
+	successStatus    int
 }
 
 // DispatchOption is a functional option for configuring Dispatch behavior.
@@ -40,6 +41,13 @@ func WithRoles(roles ...string) DispatchOption {
 func WithValidationGroup(groups ...interface{}) DispatchOption {
 	return func(c *dispatchConfig) {
 		c.validationGroups = groups
+	}
+}
+
+// WithSuccessStatus overrides the default success status inferred from the HTTP method.
+func WithSuccessStatus(status int) DispatchOption {
+	return func(c *dispatchConfig) {
+		c.successStatus = status
 	}
 }
 
@@ -95,7 +103,7 @@ func Dispatch(fn any, opts ...any) http.HandlerFunc {
 			return
 		}
 
-		executeAndRespond(w, r, fnVal, args)
+		executeAndRespond(w, r, fnVal, args, cfg.successStatus)
 	}
 }
 
@@ -152,9 +160,13 @@ func resolveArguments(w http.ResponseWriter, r *http.Request, fnType reflect.Typ
 	for i := 0; i < fnType.NumIn(); i++ {
 		paramType := fnType.In(i)
 
-		// 1. Special case: context.Context
+		// 1. Special cases owned by the active HTTP exchange.
 		if paramType.Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
 			args[i] = reflect.ValueOf(r.Context())
+			continue
+		}
+		if paramType == reflect.TypeOf((*http.ResponseWriter)(nil)).Elem() {
+			args[i] = reflect.ValueOf(w)
 			continue
 		}
 
@@ -262,7 +274,13 @@ func cleanupMultipartRequest(r *http.Request) {
 
 // ─── Execute & Respond ────────────────────────────────────────────────────────
 
-func executeAndRespond(w http.ResponseWriter, r *http.Request, fnVal reflect.Value, args []reflect.Value) {
+func executeAndRespond(
+	w http.ResponseWriter,
+	r *http.Request,
+	fnVal reflect.Value,
+	args []reflect.Value,
+	successStatus int,
+) {
 	results := fnVal.Call(args)
 
 	var errVal reflect.Value
@@ -286,11 +304,14 @@ func executeAndRespond(w http.ResponseWriter, r *http.Request, fnVal reflect.Val
 		responseData = resVal.Interface()
 	}
 
-	status := calculateSuccessStatus(r.Method)
+	status := calculateSuccessStatus(r.Method, successStatus)
 	WriteResponse(w, r, status, NewSuccessResponse(status, responseData))
 }
 
-func calculateSuccessStatus(method string) int {
+func calculateSuccessStatus(method string, override int) int {
+	if override >= http.StatusOK && override <= 299 {
+		return override
+	}
 	if method == http.MethodPost {
 		return http.StatusCreated
 	}
@@ -351,7 +372,7 @@ func DispatchTx(fn any, opts ...any) http.HandlerFunc {
 			if resVal.IsValid() {
 				responseData = resVal.Interface()
 			}
-			status := calculateSuccessStatus(r.Method)
+			status := calculateSuccessStatus(r.Method, cfg.successStatus)
 			WriteResponse(w, r, status, NewSuccessResponse(status, responseData))
 			return nil
 		})

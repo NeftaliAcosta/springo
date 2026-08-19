@@ -154,6 +154,31 @@ func TestDispatcher_DynamicParamResolution(t *testing.T) {
 	}
 }
 
+func TestDispatcher_InjectsResponseWriter(t *testing.T) {
+	ClearArgumentResolvers()
+	controllerFunc := func(writer http.ResponseWriter) (any, error) {
+		http.SetCookie(writer, &http.Cookie{
+			Name: "refreshToken", Value: "rotated-token", HttpOnly: true,
+		})
+		return map[string]string{"result": "ok"}, nil
+	}
+
+	handler := Dispatch(controllerFunc, WithSuccessStatus(http.StatusOK))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/auth/refresh", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", recorder.Code)
+	}
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != "refreshToken" {
+		t.Fatalf("unexpected cookies: %#v", cookies)
+	}
+	if !cookies[0].HttpOnly || cookies[0].Value != "rotated-token" {
+		t.Fatalf("unexpected cookie: %#v", cookies[0])
+	}
+}
+
 func TestDispatcher_DTOValidationAndBinding(t *testing.T) {
 	ClearArgumentResolvers()
 

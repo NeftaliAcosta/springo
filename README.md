@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc7` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc8` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc7
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc8
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -79,7 +79,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc7)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc8)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -119,6 +119,23 @@ springo routes
 # Regenerate OpenAPI/Swagger documentation when controllers or DTOs change
 springo swagger
 ```
+
+Controllers registrados con `web.Dispatch` pueden recibir `http.ResponseWriter` para adaptar headers o cookies
+sin mover detalles HTTP al application service:
+
+```go
+func (c *AuthController) login(
+    ctx context.Context,
+    writer http.ResponseWriter,
+    req request.LoginRequestDTO,
+) (any, error) {
+    http.SetCookie(writer, refreshCookie)
+    return c.authUseCase.Login(ctx, req.Email, req.Password)
+}
+```
+
+Cuando un `POST` exitoso conserva semántica `200 OK`, declarar
+`web.Dispatch(c.login, web.WithSuccessStatus(http.StatusOK))`. Sin override, `POST` continúa respondiendo `201`.
 
 `springo run` keeps hot reload fast by compiling only the application. Swagger generation is intentionally explicit because dependency-aware documentation analysis is considerably slower than an incremental Go build. Use `springo swagger --quiet` for silent generation or `springo swagger --main path/to/main.go` for a custom entry point.
 
