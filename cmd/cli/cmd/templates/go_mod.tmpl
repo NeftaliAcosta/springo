@@ -1,9 +1,9 @@
 module {{.ModuleName}}
 
-go 1.26.5
+go 1.26.6
 
 require (
-	github.com/NeftaliAcosta/springo v1.0.0-rc9
+	github.com/NeftaliAcosta/springo v1.0.0-rc10
 )
 
 {{if .IsLocal}}replace github.com/NeftaliAcosta/springo => {{.LocalFrameworkPath}}{{end}}

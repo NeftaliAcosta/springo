@@ -1,9 +1,9 @@
 module github.com/NeftaliAcosta/springo/demo-api
 
-go 1.26.5
+go 1.26.6
 
 require (
-	github.com/NeftaliAcosta/springo v1.0.0-rc9
+	github.com/NeftaliAcosta/springo v1.0.0-rc10
 	github.com/go-chi/chi/v5 v5.3.0
 	gorm.io/gorm v1.31.1
 )
