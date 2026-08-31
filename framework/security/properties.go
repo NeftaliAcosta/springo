@@ -2,8 +2,10 @@ package security
 
 import (
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
 	"os"
+	"strings"
+
+	"github.com/NeftaliAcosta/springo/framework/config"
 )
 
 // JwtProperties holds the security configuration for tokens
@@ -19,14 +21,19 @@ type JwtProperties struct {
 
 // Validate ensures that JWT configuration is secure for production environments.
 func (p *JwtProperties) Validate() error {
-	profile := os.Getenv("SPRINGO_PROFILES_ACTIVE")
-	if profile != "prod" {
-		return nil
-	}
-
-	alg := p.Algorithm
+	alg := strings.ToUpper(strings.TrimSpace(p.Algorithm))
 	if alg == "" {
 		alg = "HS256"
+	}
+
+	if alg != "HS256" && alg != "RS256" {
+		return fmt.Errorf("unsupported JWT algorithm %q (supported: HS256, RS256)", p.Algorithm)
+	}
+
+	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
+	isProdProfile := profile == "prod" || profile == "production" || profile == "staging" || profile == "stage"
+	if !isProdProfile {
+		return nil
 	}
 
 	if alg == "RS256" {

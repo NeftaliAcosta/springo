@@ -6,12 +6,13 @@ import (
 )
 
 // TestJwtProperties_Validate verifies that JwtProperties enforces robust security
-// policies when executing under the "prod" profile, while remaining permissive in development.
+// policies when executing under production and staging profiles, while remaining permissive in development.
 func TestJwtProperties_Validate(t *testing.T) {
 	tests := []struct {
 		name        string
 		profile     string
 		secret      string
+		algorithm   string
 		expectError bool
 	}{
 		{
@@ -25,6 +26,24 @@ func TestJwtProperties_Validate(t *testing.T) {
 			profile:     "prod",
 			secret:      "a-very-secure-secret-of-32-chars-long",
 			expectError: false,
+		},
+		{
+			name:        "Production profile alias with secure secret is acceptable",
+			profile:     "production",
+			secret:      "a-very-secure-secret-of-32-chars-long",
+			expectError: false,
+		},
+		{
+			name:        "Staging profile with weak secret is rejected",
+			profile:     "staging",
+			secret:      "weak",
+			expectError: true,
+		},
+		{
+			name:        "Stage profile alias with weak secret is rejected",
+			profile:     "stage",
+			secret:      "weak",
+			expectError: true,
 		},
 		{
 			name:        "Prod profile with empty secret is rejected",
@@ -44,6 +63,18 @@ func TestJwtProperties_Validate(t *testing.T) {
 			secret:      "too-short-secret",
 			expectError: true,
 		},
+		{
+			name:        "Unsupported algorithm none is rejected in dev",
+			profile:     "dev",
+			algorithm:   "none",
+			expectError: true,
+		},
+		{
+			name:        "Unsupported algorithm ES256 is rejected",
+			profile:     "prod",
+			algorithm:   "ES256",
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -56,6 +87,7 @@ func TestJwtProperties_Validate(t *testing.T) {
 			props := &JwtProperties{
 				Secret:     tt.secret,
 				Expiration: 60,
+				Algorithm:  tt.algorithm,
 			}
 
 			// Act
