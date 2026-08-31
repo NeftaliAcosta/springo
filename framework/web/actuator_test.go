@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -117,4 +118,42 @@ func TestActuator_BasicAuthPropertiesProductionValidation(t *testing.T) {
 
 	props.Password = "secure-prod-pass"
 	assert.NoError(t, props.Validate())
+}
+
+
+func TestActuator_HealthEndpointPrivacy(t *testing.T) {
+	props := &BasicAuthProperties{
+		Name:     "admin",
+		Password: "test-actuator-pass",
+	}
+	ioc.GetContainer().RegisterBean("BasicAuthProperties", props)
+
+	hProps := &HealthProperties{
+		ShowSystem:     true,
+		ShowComponents: true,
+	}
+	ioc.GetContainer().RegisterBean("HealthProperties", hProps)
+
+	r := chi.NewRouter()
+	RegisterActuatorRoutes(r)
+
+	// 1. Unauthenticated GET /actuator/health returns ONLY status without components or system
+	req := httptest.NewRequest(http.MethodGet, "/actuator/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"status":"UP"`)
+	assert.NotContains(t, body, `"components"`)
+	assert.NotContains(t, body, `"system"`)
+
+	// 2. Authenticated GET /actuator/health returns full details (components & system)
+	req = httptest.NewRequest(http.MethodGet, "/actuator/health", nil)
+	req.SetBasicAuth("admin", "test-actuator-pass")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	bodyAuth := w.Body.String()
+	assert.Contains(t, bodyAuth, `"status":"UP"`)
+	assert.Contains(t, bodyAuth, `"system"`)
 }

@@ -120,6 +120,17 @@ func generateRandomPassword(length int) string {
 	return string(b)
 }
 
+func isActuatorAuthenticated(r *http.Request) bool {
+	expectedUser, expectedPass := getOrGenerateCredentials()
+	user, pass, ok := r.BasicAuth()
+	if !ok {
+		return false
+	}
+	userMatch := subtle.ConstantTimeCompare([]byte(user), []byte(expectedUser)) == 1
+	passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(expectedPass)) == 1
+	return userMatch && passMatch
+}
+
 func isEndpointExposed(endpoint string) bool {
 	props := config.Get[ManagementProperties]()
 	include := "*"
@@ -153,11 +164,7 @@ func ActuatorBasicAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		expectedUser, expectedPass := getOrGenerateCredentials()
-		user, pass, ok := r.BasicAuth()
-		userMatch := subtle.ConstantTimeCompare([]byte(user), []byte(expectedUser)) == 1
-		passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(expectedPass)) == 1
-		if !ok || !userMatch || !passMatch {
+		if !isActuatorAuthenticated(r) {
 			w.Header().Set("WWW-Authenticate", `Basic realm="SprinGo Actuator"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte("401 Unauthorized\n"))
@@ -183,7 +190,21 @@ func RegisterActuatorRoutes(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			info := GetHealthInfo()
-			_ = json.NewEncoder(w).Encode(info)
+			if isActuatorAuthenticated(r) {
+				if info.Status == StatusDown {
+					w.WriteHeader(http.StatusServiceUnavailable)
+				}
+				_ = json.NewEncoder(w).Encode(info)
+				return
+			}
+
+			// Unauthenticated minimal health response
+			if info.Status == StatusDown {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]HealthStatus{
+				"status": info.Status,
+			})
 		})
 
 		r.Get("/info", func(w http.ResponseWriter, r *http.Request) {
