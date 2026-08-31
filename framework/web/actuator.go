@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"crypto/subtle"
+	"os"
 	"crypto/rand"
 	_ "embed"
 	"encoding/json"
@@ -29,6 +31,16 @@ var dashboardHTML string
 type BasicAuthProperties struct {
 	Name     string `yaml:"name"`
 	Password string `yaml:"password"`
+}
+
+func (p *BasicAuthProperties) Validate() error {
+	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
+	if profile == "prod" || profile == "production" {
+		if strings.TrimSpace(p.Password) == "" {
+			return fmt.Errorf("spring.security.user.password must be explicitly set in production profile")
+		}
+	}
+	return nil
 }
 
 // ExposureProperties controls exposed actuator endpoints
@@ -143,7 +155,9 @@ func ActuatorBasicAuthMiddleware(next http.Handler) http.Handler {
 
 		expectedUser, expectedPass := getOrGenerateCredentials()
 		user, pass, ok := r.BasicAuth()
-		if !ok || user != expectedUser || pass != expectedPass {
+		userMatch := subtle.ConstantTimeCompare([]byte(user), []byte(expectedUser)) == 1
+		passMatch := subtle.ConstantTimeCompare([]byte(pass), []byte(expectedPass)) == 1
+		if !ok || !userMatch || !passMatch {
 			w.Header().Set("WWW-Authenticate", `Basic realm="SprinGo Actuator"`)
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte("401 Unauthorized\n"))
@@ -157,9 +171,9 @@ func ActuatorBasicAuthMiddleware(next http.Handler) http.Handler {
 // RegisterActuatorRoutes configures management endpoints on the chi router
 func RegisterActuatorRoutes(r chi.Router) {
 	// Pre-generate credentials on startup to print password to console log immediately
-	user, pass := getOrGenerateCredentials()
+	user, _ := getOrGenerateCredentials()
 	if generatedPassword != "" {
-		log.Printf("🔑 [Security] Generated security password for user '%s': %s", user, pass)
+		log.Printf("🔑 [Security] A temporary security password was generated for user '%s' (set 'spring.security.user.password' to configure)", user)
 	}
 
 	// Add Basic Auth specifically for actuator endpoints

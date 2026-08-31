@@ -108,3 +108,13 @@ func TestActuator_SecurityAuthMiddleware(t *testing.T) {
 	ActuatorBasicAuthMiddleware(next).ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+
+func TestActuator_BasicAuthPropertiesProductionValidation(t *testing.T) {
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "prod")
+	props := &BasicAuthProperties{Name: "admin", Password: ""}
+	assert.Error(t, props.Validate())
+
+	props.Password = "secure-prod-pass"
+	assert.NoError(t, props.Validate())
+}
