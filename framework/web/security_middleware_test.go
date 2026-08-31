@@ -91,3 +91,30 @@ func TestIsPublicPath(t *testing.T) {
 		})
 	}
 }
+
+
+func TestIsActuatorPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"Exact actuator root", "/actuator", true},
+		{"Actuator root with trailing slash", "/actuator/", true},
+		{"Actuator health subpath", "/actuator/health", true},
+		{"Actuator loggers subpath", "/actuator/loggers", true},
+		{"Sibling path prefix /actuator-publication", "/actuator-publication", false},
+		{"Sibling path prefix /actuators", "/actuators", false},
+		{"Sibling path prefix /actuator-data", "/actuator-data", false},
+		{"Unrelated path /api/v1/users", "/api/v1/users", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := isActuatorPath(tt.path)
+			if actual != tt.expected {
+				t.Errorf("isActuatorPath(%q) = %v; want %v", tt.path, actual, tt.expected)
+			}
+		})
+	}
+}

@@ -12,6 +12,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// isActuatorPath checks if the current request path matches the actuator base endpoint or any of its subpaths safely.
+func isActuatorPath(path string) bool {
+	p := strings.TrimSuffix(path, "/")
+	return p == "/actuator" || strings.HasPrefix(path, "/actuator/")
+}
+
 // AuthMiddleware creates a middleware that validates JWT tokens based on framework properties
 func AuthMiddleware(next http.Handler) http.Handler {
 	props := config.Get[security.JwtProperties]()
@@ -23,7 +29,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		WithAsymmetricConfig(props.JwksURL, props.PublicKey, props.Algorithm)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/actuator") || isPublicPath(r.URL.Path, props.PublicPaths) {
+		if isActuatorPath(r.URL.Path) || isPublicPath(r.URL.Path, props.PublicPaths) {
 			next.ServeHTTP(w, r)
 			return
 		}

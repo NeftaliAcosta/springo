@@ -153,7 +153,7 @@ func isEndpointExposed(endpoint string) bool {
 func ActuatorBasicAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only intercept /actuator paths
-		if !strings.HasPrefix(r.URL.Path, "/actuator") {
+		if !isActuatorPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
