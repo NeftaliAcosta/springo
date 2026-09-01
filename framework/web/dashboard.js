@@ -383,3 +383,47 @@ let allBeans = [];
         }
         
         refreshAll();
+// CSP EVENT LISTENERS
+document.addEventListener('DOMContentLoaded', () => {
+    // Tabs
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(tab => {
+        if (tab.hasAttribute('data-tab')) {
+            tab.addEventListener('click', function() {
+                switchTab(this.getAttribute('data-tab'), this);
+            });
+        }
+    });
+
+    // Global Log Level
+    const logSelect = document.getElementById('global-log-level');
+    if (logSelect) {
+        logSelect.addEventListener('change', function() {
+            changeLogLevel(this.value);
+        });
+    }
+
+    // Purge DLQ
+    const btnPurge = document.getElementById('btn-purge-dlq');
+    if (btnPurge) {
+        btnPurge.addEventListener('click', purgeAllDLQ);
+    }
+
+    // Bean Search
+    const beanSearch = document.getElementById('bean-search');
+    if (beanSearch) {
+        beanSearch.addEventListener('keyup', filterBeans);
+    }
+
+    // Env Search
+    const envSearch = document.getElementById('env-search');
+    if (envSearch) {
+        envSearch.addEventListener('keyup', filterEnv);
+    }
+
+    // Thread Dump Refresh
+    const btnThread = document.getElementById('btn-refresh-thread');
+    if (btnThread) {
+        btnThread.addEventListener('click', loadThreadDump);
+    }
+});

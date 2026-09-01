@@ -23,13 +23,13 @@
 
         <!-- Navigation Tabs -->
         <div class="nav-tabs glass">
-            <button class="tab-btn active" onclick="switchTab('tab-dashboard', this)">📊 Dashboard</button>
-            <button class="tab-btn" onclick="switchTab('tab-loggers', this)">📝 Loggers</button>
-            <button class="tab-btn" onclick="switchTab('tab-tasks', this)">⏰ Scheduled Tasks</button>
-            <button class="tab-btn" onclick="switchTab('tab-dlq', this)">📥 DLQ &amp; Events</button>
-            <button class="tab-btn" onclick="switchTab('tab-beans', this)">🫘 Beans</button>
-            <button class="tab-btn" onclick="switchTab('tab-env', this)">🌐 Environment</button>
-            <button class="tab-btn" onclick="switchTab('tab-thread', this)">🧩 Thread Dump</button>
+            <button class="tab-btn active" data-tab="tab-dashboard">📊 Dashboard</button>
+            <button class="tab-btn" data-tab="tab-loggers">📝 Loggers</button>
+            <button class="tab-btn" data-tab="tab-tasks">⏰ Scheduled Tasks</button>
+            <button class="tab-btn" data-tab="tab-dlq">📥 DLQ &amp; Events</button>
+            <button class="tab-btn" data-tab="tab-beans">🫘 Beans</button>
+            <button class="tab-btn" data-tab="tab-env">🌐 Environment</button>
+            <button class="tab-btn" data-tab="tab-thread">🧩 Thread Dump</button>
         </div>
 
         <!-- Tab Panels -->
@@ -110,7 +110,7 @@
                             <p class="text-secondary" style="font-size: 0.8rem; margin-top: 0.2rem;">Adjusts root log level dynamically across all framework modules.</p>
                         </div>
                         <div>
-                            <select id="global-log-level" class="select" onchange="changeLogLevel(this.value)">
+                            <select id="global-log-level" class="select" >
                                 <option value="DEBUG">DEBUG</option>
                                 <option value="INFO">INFO</option>
                                 <option value="WARN">WARN</option>
@@ -156,7 +156,7 @@
                 <div class="card-header">
                     <div class="card-title">📥 Dead Letter Queue (Failed Events)</div>
                     <div>
-                        <button class="btn btn-danger btn-outline" onclick="purgeAllDLQ()">🗑️ Purge All</button>
+                        <button class="btn btn-danger btn-outline" id="btn-purge-dlq">🗑️ Purge All</button>
                     </div>
                 </div>
                 <div class="card-body">
@@ -182,7 +182,7 @@
 
         <!-- 5. BEANS -->
         <div id="tab-beans" class="panel">
-            <input type="text" id="bean-search" class="search-bar" placeholder="🔍 Search beans..." onkeyup="filterBeans()">
+            <input type="text" id="bean-search" class="search-bar" placeholder="🔍 Search beans..." >
             <div class="glass">
                 <div class="card-body">
                     <table class="table">
@@ -203,7 +203,7 @@
 
         <!-- 6. ENVIRONMENT -->
         <div id="tab-env" class="panel">
-            <input type="text" id="env-search" class="search-bar" placeholder="🔍 Search properties..." onkeyup="filterEnv()">
+            <input type="text" id="env-search" class="search-bar" placeholder="🔍 Search properties..." >
             <div class="glass">
                 <div class="card-body">
                     <table class="table">
@@ -227,7 +227,7 @@
                 <div class="card-header">
                     <div class="card-title">🧩 Active Goroutines Stack Trace</div>
                     <div>
-                        <button class="btn btn-outline" onclick="loadThreadDump()">🔄 Refresh Stack</button>
+                        <button class="btn btn-outline" id="btn-refresh-thread">🔄 Refresh Stack</button>
                     </div>
                 </div>
                 <div class="card-body">
