@@ -27,6 +27,12 @@ import (
 //go:embed dashboard.html
 var dashboardHTML string
 
+//go:embed dashboard.css
+var dashboardCSS string
+
+//go:embed dashboard.js
+var dashboardJS string
+
 // BasicAuthProperties defines basic security settings
 type BasicAuthProperties struct {
 	Name     string `yaml:"name"`
@@ -226,6 +232,28 @@ func RegisterActuatorRoutes(r chi.Router) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(dashboardHTML))
+		})
+
+		r.Get("/css/dashboard.css", func(w http.ResponseWriter, r *http.Request) {
+			if !isEndpointExposed("dashboard") {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(dashboardCSS))
+		})
+
+		r.Get("/js/dashboard.js", func(w http.ResponseWriter, r *http.Request) {
+			if !isEndpointExposed("dashboard") {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(dashboardJS))
 		})
 
 		r.Get("/threaddump", func(w http.ResponseWriter, r *http.Request) {

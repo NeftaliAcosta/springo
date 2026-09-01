@@ -1,6 +1,7 @@
 package web
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,13 +27,13 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 	assert.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "camera=(), microphone=(), geolocation=(), payment=()", w.Header().Get("Permissions-Policy"))
 	assert.Equal(t, "none", w.Header().Get("X-Permitted-Cross-Domain-Policies"))
-	assert.Equal(t, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;", w.Header().Get("Content-Security-Policy"))
+	assert.Equal(t, "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;", w.Header().Get("Content-Security-Policy"))
 	assert.Empty(t, w.Header().Get("Strict-Transport-Security")) // Not HTTPS
 }
 
 func TestSecurityHeadersMiddleware_HTTPS(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/path", nil)
-	req.Header.Set("X-Forwarded-Proto", "https")
+	req.TLS = &tls.ConnectionState{}
 	w := httptest.NewRecorder()
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
