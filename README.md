@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc10` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc11` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc10
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc11
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -79,7 +79,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc10)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc11)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -212,8 +212,10 @@ SPRINGO_PROFILES_ACTIVE=prod ./main
 
 ## 🔐 Security & Safety
 
-- **Production Hardening**: Production profile automatically enforces 256-bit JWT secret entropy.
-- **Demo Safety**: `demo-api/` is a separate test module. Its development JWT secrets are rejected automatically in `prod` profiles.
+- **Actuator Health Privacy**: Public unauthenticated `GET /actuator/health` returns minimal status `{"status": "UP"}` for load balancers and Kubernetes probes without exposing database connection pool metrics, goroutines, or system topology. Authenticated requests (and the embedded Glassmorphic Admin Dashboard via Basic Auth) receive full detailed component metrics.
+- **Production & Staging Hardening**: Profile validation (`prod`, `production`, `staging`, `stage`) automatically enforces 256-bit JWT secret entropy, explicit non-empty Actuator Basic Auth passwords, and restricts algorithms to supported standard types (`HS256`, `RS256`).
+- **Boundary-Safe Path Matching**: Segment-boundary route checking (`/actuator` and `/actuator/*`) prevents sibling paths from accidentally bypassing JWT security or entering Basic Auth.
+- **Modern OWASP Security Headers**: `SecurityHeadersMiddleware` automatically enforces `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`, `X-Permitted-Cross-Domain-Policies: none`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and conditional `HSTS`.
 
 ---
 
