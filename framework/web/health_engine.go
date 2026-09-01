@@ -126,9 +126,9 @@ func GetHealthInfo() HealthInfo {
 		uptime = time.Since(appStartTime).Round(time.Second).String()
 	}
 
-	// Clean up components if show-components is false and no custom indicators registered
+	// Include components if show-components is true or custom indicators are registered
 	var finalComponents map[string]ComponentHealth
-	if props.ShowComponents && len(components) > 0 {
+	if (props.ShowComponents || len(registry) > 0) && len(components) > 0 {
 		finalComponents = components
 	}
 

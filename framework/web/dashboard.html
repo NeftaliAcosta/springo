@@ -785,7 +785,7 @@
                 dbContainer.innerHTML = '';
                 
                 if (info.components) {
-                    const keys = Object.keys(info.components).filter(k => k.startsWith('db.'));
+                    const keys = Object.keys(info.components);
                     if (keys.length === 0) {
                         dbContainer.innerHTML = `<p class="text-secondary">No DB component health data collected.</p>`;
                     } else {
@@ -796,13 +796,23 @@
                             card.style.padding = '0.75rem';
                             card.style.background = 'rgba(255, 255, 255, 0.02)';
                             card.style.borderRadius = '8px';
+                            let detailText = 'No stats available.';
+                            if (db.details) {
+                                if (db.details.ping_time !== undefined) {
+                                    detailText = `Ping: ${db.details.ping_time || '---'} | Pool Open/Active: ${db.details.open || 0}/${db.details.in_use || 0}`;
+                                } else if (db.details.cache) {
+                                    detailText = `Provider: ${db.details.cache} | Status: ${db.details.status || 'connected'}`;
+                                } else {
+                                    detailText = Object.entries(db.details).map(([k,v]) => `${k}: ${v}`).join(' | ');
+                                }
+                            }
                             card.innerHTML = `
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                                     <strong>${key}</strong>
                                     <span class="status-badge ${db.status === 'UP' ? 'status-up' : 'status-down'}">${db.status}</span>
                                 </div>
                                 <div style="font-size:0.8rem; color:var(--text-secondary)">
-                                    ${db.details ? `Ping: ${db.details.ping_time || '---'} | Pool Open/Active: ${db.details.open || 0}/${db.details.in_use || 0}` : 'No stats available.'}
+                                    ${detailText}
                                 </div>
                             `;
                             dbContainer.appendChild(card);
