@@ -3,7 +3,7 @@ let allBeans = [];
 
         function switchTab(tabId, btn) {
             if (!btn) {
-                btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId));
+                btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('data-tab') === tabId);
             }
             if (!btn) return;
 
@@ -419,6 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const envSearch = document.getElementById('env-search');
     if (envSearch) {
         envSearch.addEventListener('keyup', filterEnv);
+    }
+
+    // Global Refresh
+    const btnRefreshAll = document.getElementById('btn-refresh-all');
+    if (btnRefreshAll) {
+        btnRefreshAll.addEventListener('click', refreshAll);
     }
 
     // Thread Dump Refresh
