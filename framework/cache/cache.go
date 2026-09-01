@@ -10,6 +10,7 @@ type Cache interface {
 	Name() string
 	Get(ctx context.Context, key string) (any, bool)
 	Set(ctx context.Context, key string, value any, ttl time.Duration) error
+	Increment(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error)
 	Evict(ctx context.Context, key string) error
 	Clear(ctx context.Context) error
 }

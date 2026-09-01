@@ -55,6 +55,7 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 
 type WebServerProperties struct {
 	Port              int                 `yaml:"port"`
+	TrustedProxies    []string            `yaml:"trusted-proxies"`
 	API               APIProperties       `yaml:"api"`
 	Multipart         MultipartProperties `yaml:"multipart"`
 	ReadHeaderTimeout time.Duration       `yaml:"read-header-timeout"`

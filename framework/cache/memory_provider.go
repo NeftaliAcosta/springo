@@ -78,3 +78,41 @@ func (c *memoryCache) Clear(ctx context.Context) error {
 	c.mu.Unlock()
 	return nil
 }
+
+
+func (c *memoryCache) Increment(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error) {
+	var expiration int64
+	if ttl == 0 {
+		ttl = c.ttl
+	}
+
+	if ttl > 0 {
+		expiration = time.Now().Add(ttl).UnixNano()
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	item, ok := c.data[key]
+	var current int64
+	if ok {
+		if item.expiration > 0 && time.Now().UnixNano() > item.expiration {
+			current = 0 // Expired
+		} else {
+			switch v := item.value.(type) {
+			case int:
+				current = int64(v)
+			case int64:
+				current = v
+			case float64:
+				current = int64(v)
+			default:
+				current = 0
+			}
+		}
+	}
+	
+	current += delta
+	c.data[key] = cacheItem{value: current, expiration: expiration}
+	return current, nil
+}
