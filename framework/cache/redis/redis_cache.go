@@ -16,9 +16,15 @@ type RedisProperties struct {
 	Port     int    `yaml:"port"`
 	Password string `yaml:"password"`
 	DB       int    `yaml:"db"`
+	URL      string `yaml:"url"`
 }
 
 func init() {
+	config.RegisterProperties("spring.cache.redis", &RedisProperties{
+		Host: "localhost",
+		Port: 6379,
+		DB:   0,
+	})
 	config.RegisterProperties("redis", &RedisProperties{
 		Host: "localhost",
 		Port: 6379,

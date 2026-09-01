@@ -155,8 +155,10 @@ func InitializeProperties(loader *ConfigLoader) error {
 		}
 		// Register the filled struct as a Bean in IoC container
 		// We use the pointer type name as the bean name
-		beanName := reflect.TypeOf(reg.target).Elem().Name()
-		ioc.GetContainer().RegisterBean(beanName, reg.target)
+		t := reflect.TypeOf(reg.target).Elem()
+		fullName := t.PkgPath() + "." + t.Name()
+		ioc.GetContainer().RegisterBean(fullName, reg.target)
+		ioc.GetContainer().RegisterBean(t.Name(), reg.target)
 	}
 	return nil
 }
@@ -164,12 +166,20 @@ func InitializeProperties(loader *ConfigLoader) error {
 // Get retrieves a registered property bean from the IoC container
 func Get[T any]() *T {
 	var zero T
-	name := reflect.TypeOf(zero).Name()
-	bean := ioc.GetContainer().GetBean(name)
+	t := reflect.TypeOf(zero)
+	fullName := t.PkgPath() + "." + t.Name()
+	bean := ioc.GetContainer().GetBean(fullName)
+	if bean == nil {
+		bean = ioc.GetContainer().GetBean(t.Name())
+	}
 	if bean == nil {
 		return nil
 	}
-	return bean.(*T)
+	res, ok := bean.(*T)
+	if !ok {
+		return nil
+	}
+	return res
 }
 
 // GetConfigProperties returns a copy of all loaded properties grouped by their prefix
