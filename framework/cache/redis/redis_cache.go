@@ -24,6 +24,7 @@ func init() {
 		Port: 6379,
 		DB:   0,
 	})
+	Enable()
 }
 
 var client *goredis.Client
