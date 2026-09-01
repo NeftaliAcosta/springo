@@ -31,8 +31,8 @@ func (p *JwtProperties) Validate() error {
 	}
 
 	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
-	isProdProfile := profile == "prod" || profile == "production" || profile == "staging" || profile == "stage"
-	if !isProdProfile {
+	isDevProfile := profile == "dev" || profile == "development" || profile == "local" || profile == "test"
+	if isDevProfile {
 		return nil
 	}
 

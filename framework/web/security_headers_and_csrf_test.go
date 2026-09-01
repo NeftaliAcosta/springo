@@ -26,6 +26,7 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 	assert.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "camera=(), microphone=(), geolocation=(), payment=()", w.Header().Get("Permissions-Policy"))
 	assert.Equal(t, "none", w.Header().Get("X-Permitted-Cross-Domain-Policies"))
+	assert.Equal(t, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;", w.Header().Get("Content-Security-Policy"))
 	assert.Empty(t, w.Header().Get("Strict-Transport-Security")) // Not HTTPS
 }
 

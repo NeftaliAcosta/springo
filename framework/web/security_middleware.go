@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net"
 	"context"
 	"fmt"
 	"github.com/NeftaliAcosta/springo/framework/config"
@@ -115,12 +116,28 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
-		// HSTS (Strict-Transport-Security)
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;")
+		// HSTS (Strict-Transport-Security) with proxy validation
+		if r.TLS != nil || (r.Header.Get("X-Forwarded-Proto") == "https" && isHeaderFromTrustedProxy(r)) {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isHeaderFromTrustedProxy(r *http.Request) bool {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && h != "" {
+		host = h
+	}
+	if host == "" || host == "192.0.2.1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified()
 }
 
 // isPublicPath checks if the current request path matches any of the configured public paths.

@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc12` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc13` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc12
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc13
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -79,7 +79,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc12)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc13)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
