@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/lifecycle"
 	"github.com/NeftaliAcosta/springo/framework/scheduler"
 	"net/http"
 	"os"
@@ -18,6 +19,8 @@ func TestApplication_Lifecycle(t *testing.T) {
 	// Restore registrations and configs to prevent test contamination
 	restore := scheduler.BackupRegistrations()
 	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
 	t.Cleanup(func() {
 		ioc.GetContainer().Clear()
 		config.ResetProperties()
@@ -26,6 +29,20 @@ func TestApplication_Lifecycle(t *testing.T) {
 	// Set test profile so it doesn't load physical schema/data files
 	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	var lifecycleCalls []string
+	lifecycle.RegisterInitializer("test-initializer", 0, func(context.Context) error {
+		lifecycleCalls = append(lifecycleCalls, "initializer")
+		return nil
+	})
+	lifecycle.RegisterReady("test-ready", 0, func(context.Context) error {
+		lifecycleCalls = append(lifecycleCalls, "ready")
+		return nil
+	})
+	lifecycle.RegisterShutdown("test-shutdown", 0, func(context.Context) error {
+		lifecycleCalls = append(lifecycleCalls, "shutdown")
+		return nil
+	})
 
 	// Bootstrap application using BootstrapE instead of Bootstrap to avoid os.Exit on error
 	app, err := BootstrapE(Options{
@@ -62,6 +79,7 @@ func TestApplication_Lifecycle(t *testing.T) {
 
 	err = app.Shutdown(shutdownCtx)
 	assert.NoError(t, err)
+	assert.Equal(t, []string{"initializer", "ready", "shutdown"}, lifecycleCalls)
 
 	// Expect Run() to have returned http.ErrServerClosed or nil
 	select {
@@ -75,6 +93,8 @@ func TestApplication_Lifecycle(t *testing.T) {
 func TestApplication_BootstrapE_Success(t *testing.T) {
 	restore := scheduler.BackupRegistrations()
 	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
 	t.Cleanup(func() {
 		ioc.GetContainer().Clear()
 		config.ResetProperties()
@@ -94,6 +114,8 @@ func TestApplication_BootstrapE_Success(t *testing.T) {
 func TestApplication_BootstrapE_Failure(t *testing.T) {
 	restore := scheduler.BackupRegistrations()
 	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
 	t.Cleanup(func() {
 		ioc.GetContainer().Clear()
 		config.ResetProperties()
@@ -112,4 +134,62 @@ func TestApplication_BootstrapE_Failure(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, app)
 	assert.Contains(t, err.Error(), "mocked critical auth token failure")
+}
+
+func TestApplication_BootstrapE_InitializerFailure(t *testing.T) {
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	lifecycle.RegisterInitializer("failing-initializer", 0, func(context.Context) error {
+		return fmt.Errorf("mocked initializer failure")
+	})
+
+	app, err := BootstrapE(Options{DisableBanner: true})
+	assert.Error(t, err)
+	assert.Nil(t, app)
+	assert.Contains(t, err.Error(), "mocked initializer failure")
+}
+
+func TestApplication_Run_ReadyFailureShutsDown(t *testing.T) {
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	shutdownCalled := false
+	lifecycle.RegisterReady("failing-ready", 0, func(context.Context) error {
+		return fmt.Errorf("mocked ready failure")
+	})
+	lifecycle.RegisterShutdown("test-shutdown", 0, func(context.Context) error {
+		shutdownCalled = true
+		return nil
+	})
+
+	app, err := BootstrapE(Options{DisableBanner: true})
+	assert.NoError(t, err)
+
+	err = app.Run(context.Background())
+	assert.ErrorContains(t, err, "mocked ready failure")
+	assert.True(t, shutdownCalled)
+	select {
+	case <-app.Ready():
+		t.Fatal("Ready channel must remain open when a ready hook fails")
+	default:
+	}
 }

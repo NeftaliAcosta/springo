@@ -7,6 +7,7 @@ import (
 	"github.com/NeftaliAcosta/springo/framework/database"
 	"github.com/NeftaliAcosta/springo/framework/event"
 	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/lifecycle"
 	"github.com/NeftaliAcosta/springo/framework/logging"
 	"github.com/NeftaliAcosta/springo/framework/scheduler"
 	"github.com/NeftaliAcosta/springo/framework/web"
@@ -107,6 +108,14 @@ func BootstrapE(opts ...Options) (*Application, error) {
 
 	// 6. Initialize IoC Container (for Services/Repositories)
 	ioc.GetContainer().InitializeAllBeans(dbConn)
+
+	// 6.25 Execute fail-fast application initializers.
+	cleanups = append(cleanups, func() {
+		_ = lifecycle.RunShutdown(context.Background())
+	})
+	if err := lifecycle.RunInitializers(context.Background()); err != nil {
+		return nil, fmt.Errorf("application initialization failed: %w", err)
+	}
 
 	// 6.5 Run Critical Startup Jobs
 	if err := scheduler.RunStartupTasksE(); err != nil {
@@ -367,8 +376,15 @@ func (a *Application) Run(ctx context.Context) error {
 	a.mu.Lock()
 	a.httpServer = server
 	a.listener = ln
-	close(a.readyChan) // Signal server is ready and listening
 	a.mu.Unlock()
+
+	if err := lifecycle.RunReady(ctx); err != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = a.Shutdown(shutdownCtx)
+		return fmt.Errorf("application ready hook failed: %w", err)
+	}
+	close(a.readyChan) // Signal server and ready hooks completed successfully.
 
 	// Monitor context cancellation
 	stopCtxChan := make(chan struct{})
@@ -417,6 +433,7 @@ func (a *Application) Shutdown(ctx context.Context) error {
 
 func (a *Application) doShutdown(ctx context.Context) error {
 	log.Println("🛑 Shutting down SprinGo application context...")
+	var errs []error
 
 	a.mu.Lock()
 	srv := a.httpServer
@@ -433,11 +450,14 @@ func (a *Application) doShutdown(ctx context.Context) error {
 	log.Println("📦 Stopping event bus worker pool...")
 	event.StopWorkerPool()
 
+	// 3.5 Execute application shutdown hooks in reverse order.
+	if err := lifecycle.RunShutdown(ctx); err != nil {
+		errs = append(errs, err)
+	}
+
 	// 4. Close telemetry
 	log.Println("📊 Closing telemetry...")
 	web.CloseTelemetry()
-
-	var errs []error
 
 	// 5. Close additional datasources and io.Closer beans
 	errs = append(errs, a.closeAdditionalBeans()...)

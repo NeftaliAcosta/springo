@@ -6,10 +6,6 @@ spring:
   datasource:
     driver: sqlite
     url: springo.db
-  security:
-    jwt:
-      secret: "super-secret-key-at-least-32-chars-long-security"
-      expiration: 86400
   event:
     enabled: true
     concurrency:
@@ -22,3 +18,8 @@ spring:
       web:
         exposure:
           include: "*"
+
+security:
+  jwt:
+    secret: "super-secret-key-at-least-32-chars-long-security"
+    expiration: 86400

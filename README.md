@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc13` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc16` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc13
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc16
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -52,6 +52,7 @@ Your API is now live at `http://localhost:8080` with Actuator Dashboard at `http
 | 🛠️ **CLI Tooling** | **Code Generators & Scaffolding** | `springo new` and `springo make` for instant Hexagonal Architecture components. |
 | 🎛️ **Management** | **Spring-style Actuator** | Embedded Glassmorphic UI Dashboard for Health, Goroutine Dumps, Beans & DLQ. |
 | 🧩 **Core Engine** | **IoC & Auto-Wiring** | Dependency injection container with reflection & tag-based field autowiring (`spring:"beanName"`). |
+| 🔄 **Lifecycle** | **Initializer, Ready & Shutdown Hooks** | Ordered, fail-safe application hooks keep infrastructure setup out of `main.go`. |
 | 📤 **Web Binding** | **JSON & Multipart DTOs** | Declarative request binding for JSON, path/query values and streamed multipart files with configurable limits. |
 | 🔒 **Security** | **Enterprise JWT & CSRF** | Support for HS256, RS256 (Keycloak/Auth0 JWKS), OWASP Security Headers & CSRF. |
 | ⚡ **Database** | **GORM & ShedLock** | Declarative transactions with `REQUIRED` propagation and cluster-wide cron locking. |
@@ -74,12 +75,13 @@ springo/
 │   ├── database/              # GORM datasource & ShedLock migrator
 │   ├── event/                 # Pub/Sub EventBus, Outbox & DLQ
 │   ├── ioc/                   # Dependency Injection Container
+│   ├── lifecycle/             # Ordered startup, readiness & shutdown hooks
 │   ├── scheduler/             # Cron manager with ShedLock
 │   ├── security/              # JWT & LDAP providers
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc13)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc16)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -138,6 +140,68 @@ Cuando un `POST` exitoso conserva semántica `200 OK`, declarar
 `web.Dispatch(c.login, web.WithSuccessStatus(http.StatusOK))`. Sin override, `POST` continúa respondiendo `201`.
 
 `springo run` keeps hot reload fast by compiling only the application. Swagger generation is intentionally explicit because dependency-aware documentation analysis is considerably slower than an incremental Go build. Use `springo swagger --quiet` for silent generation or `springo swagger --main path/to/main.go` for a custom entry point.
+
+---
+
+## 🔄 Application Lifecycle
+
+Infrastructure components can register ordered lifecycle hooks instead of adding setup and cleanup logic to
+`main.go`. This follows the same separation used by Spring Boot lifecycle callbacks while keeping Go registration
+explicit and type-safe.
+
+```go
+package observability
+
+import (
+    "context"
+
+    "github.com/NeftaliAcosta/springo/framework/lifecycle"
+)
+
+func init() {
+    lifecycle.RegisterInitializer("observability.sentry", 100, initializeSentry)
+    lifecycle.RegisterReady("observability.sentry", 100, verifySentry)
+    lifecycle.RegisterShutdown("observability.sentry", 100, flushSentry)
+}
+
+func initializeSentry(ctx context.Context) error {
+    // Load and validate the integration after configuration and IoC are available.
+    return nil
+}
+
+func verifySentry(ctx context.Context) error {
+    // Optionally verify readiness after the HTTP listener has been created.
+    return nil
+}
+
+func flushSentry(ctx context.Context) error {
+    // Flush and close the integration during graceful shutdown.
+    return nil
+}
+```
+
+The application entrypoint remains focused on composition:
+
+```go
+func main() {
+    framework.Bootstrap(framework.Options{
+        Middlewares: []func(http.Handler) http.Handler{
+            web.SecurityHeadersMiddleware,
+        },
+    }).Start()
+}
+```
+
+- Hook names must be non-empty and unique within their lifecycle phase.
+- Initializers run after configuration, datasources, migrations, and IoC initialization. They execute in ascending
+  `order` and fail fast, so `BootstrapE` returns the error and performs registered cleanup.
+- Ready hooks run in ascending `order` after the HTTP listener is created but before `Application.Ready()` is
+  signaled. All errors are collected; any error prevents readiness and triggers graceful shutdown.
+- Shutdown hooks run once during `Application.Shutdown`, in descending `order`, so resources close in reverse order.
+  All errors are collected without skipping later hooks.
+- Each hook receives a `context.Context`. A panic is recovered and returned as a named lifecycle error.
+
+Use `lifecycle.BackupRegistrations()` only in tests to isolate global registrations and restore them afterward.
 
 ---
 

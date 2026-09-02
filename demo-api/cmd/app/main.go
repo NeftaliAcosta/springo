@@ -18,7 +18,7 @@ import (
 )
 
 // @title SprinGo API
-// @version 1.0.0-rc5
+// @version 1.0.0-rc16
 // @description API Server for SprinGo Framework with Hexagonal Architecture.
 // @termsOfService http://swagger.io/terms/
 
