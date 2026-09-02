@@ -21,7 +21,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc16` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc17` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +30,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc16
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc17
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -81,7 +81,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc16)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc17)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -199,6 +199,7 @@ func main() {
   signaled. All errors are collected; any error prevents readiness and triggers graceful shutdown.
 - Shutdown hooks run once during `Application.Shutdown`, in descending `order`, so resources close in reverse order.
   All errors are collected without skipping later hooks.
+- `Application.Start()` handles `SIGINT` and `SIGTERM`, then invokes graceful shutdown before the process exits.
 - Each hook receives a `context.Context`. A panic is recovered and returned as a named lifecycle error.
 
 Use `lifecycle.BackupRegistrations()` only in tests to isolate global registrations and restore them afterward.

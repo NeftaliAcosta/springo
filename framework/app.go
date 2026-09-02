@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/NeftaliAcosta/springo/framework/database"
@@ -16,8 +17,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -340,9 +343,19 @@ func Bootstrap(opts ...Options) *Application {
 
 // Start launches the web server by delegating to Run
 func (a *Application) Start() {
-	if err := a.Run(context.Background()); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := a.runAndShutdown(ctx); err != nil {
 		log.Fatal("Server startup failed: ", err)
 	}
+}
+
+func (a *Application) runAndShutdown(ctx context.Context) error {
+	runErr := a.Run(ctx)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	shutdownErr := a.Shutdown(shutdownCtx)
+	return errors.Join(runErr, shutdownErr)
 }
 
 // Run executes command line runners, background tasks, and starts serving on dynamic port securely

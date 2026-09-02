@@ -193,3 +193,45 @@ func TestApplication_Run_ReadyFailureShutsDown(t *testing.T) {
 	default:
 	}
 }
+
+func TestApplication_RunAndShutdownFinalizesOnCancellation(t *testing.T) {
+	restore := scheduler.BackupRegistrations()
+	t.Cleanup(restore)
+	restoreLifecycle := lifecycle.BackupRegistrations()
+	t.Cleanup(restoreLifecycle)
+	t.Cleanup(func() {
+		ioc.GetContainer().Clear()
+		config.ResetProperties()
+	})
+
+	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+
+	shutdownCalled := false
+	lifecycle.RegisterShutdown("test-shutdown", 0, func(context.Context) error {
+		shutdownCalled = true
+		return nil
+	})
+	app, err := BootstrapE(Options{DisableBanner: true})
+	assert.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errChan := make(chan error, 1)
+	go func() { errChan <- app.runAndShutdown(ctx) }()
+
+	select {
+	case <-app.Ready():
+		cancel()
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timeout waiting for application readiness")
+	}
+
+	select {
+	case err := <-errChan:
+		assert.NoError(t, err)
+		assert.True(t, shutdownCalled)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for graceful shutdown")
+	}
+}
