@@ -275,6 +275,70 @@ SPRINGO_PROFILES_ACTIVE=prod ./main
 
 ---
 
+## 📖 Step-by-Step Tutorials & Documentation
+
+Explore our comprehensive library of step-by-step guides from zero to production:
+
+### 🚀 Getting Started & CLI
+- 🚀 **[Zero-to-Production Beginner Guide](docs/tutorials/11_zero_to_hero_quickstart.md)**:
+  Scaffolding, architecture, database setup, Docker containerization, and cloud deployment.
+- 🛠️ **[SprinGo CLI Complete Reference](docs/tutorials/06_springo_cli_complete_guide.md)**:
+  All commands, generators, database migrations, route discovery, and Swagger tools.
+- 🏗️ **[Flattened Hexagonal Architecture Guide](docs/tutorials/19_hexagonal_architecture_pattern.md)**:
+  Clean separation of concerns, domain models, ports, services, and adapters.
+- ☕ **[Java Spring Boot to SprinGo Migration Guide](docs/tutorials/17_spring_boot_migration_guide.md)**:
+  Rosetta Stone mapping annotations, concepts, and architectural patterns to Go.
+
+### 🧩 Core Framework & IoC
+- ⚙️ **[Configuration Properties & Profiles](docs/tutorials/05_configuration_and_profiles.md)**:
+  Fail-fast YAML binding, dynamic env fallbacks, Sentry/Redis setups, and multi-profile environments.
+- 🧩 **[IoC Container & Bean Configuration](docs/tutorials/01_bean_configuration.md)**:
+  Factories `(T, error)`, dynamic parameter injection, `Provider[T]`, and field autowiring.
+- 🔄 **[Lifecycle Hooks & Graceful Shutdown](docs/tutorials/10_lifecycle_hooks_and_graceful_shutdown.md)**:
+  Ordered startup initializers, readiness verification, and OS signal shutdown traps.
+
+### 🌐 Web, REST & Security
+- 🌐 **[REST Web Routing & DTO Validation](docs/tutorials/07_web_routing_and_validation.md)**:
+  Chi router integration, `web.Dispatch`, JSON & Multipart file binding, and status overrides.
+- 🛡️ **[Advanced DTO Validation & Groups](docs/tutorials/23_advanced_dto_validation_and_groups.md)**:
+  Validation groups (`OnCreate`, `OnUpdate`), custom validator tags, and Problem Details.
+- 🌐 **[CORS & Origin Whitelist Configuration](docs/tutorials/21_cors_whitelist_configuration.md)**:
+  Exact origin whitelist, dynamic wildcard patterns, credentials, and preflight caching.
+- 🔐 **[JWT Security, OWASP Headers & Middleware](docs/tutorials/08_security_jwt_and_middleware.md)**:
+  JWT (HS256/RS256 JWKS), claims extraction, security headers, CSRF, and custom middlewares.
+- 🏢 **[Corporate Security & Active Directory LDAP](docs/tutorials/20_corporate_security_and_ldap.md)**:
+  Active Directory / LDAP authentication, group-to-role mappings, and TLS/StartTLS.
+- 🚨 **[Standardized Error Handling & RFC 7807](docs/tutorials/14_error_handling_and_rfc7807.md)**:
+  Domain error sentinels, Problem Details output, and field-level validation errors.
+
+### ⚡ Data, Transactions & Background Jobs
+- ⚡ **[Declarative Transaction Management](docs/tutorials/02_transaction_management.md)**:
+  Spring-like propagation levels, panic/error rollback safety, and post-commit events.
+- 🗄️ **[Multiple DataSources & Pool Tuning](docs/tutorials/22_multiple_datasources_and_pooling.md)**:
+  Primary and named secondary datasources, read replicas, and connection pool sizing.
+- 🗄️ **[SQL & Programmatic Go Migrations](docs/tutorials/18_programmatic_and_sql_migrations.md)**:
+  Dual-engine migrations with `db.AutoMigrate(&Entity{})`, Flyway-style SQL, and ShedLock.
+- 📜 **[Hibernate Envers-Style Auditing](docs/tutorials/03_envers_auditing.md)**:
+  Change data capture, dialect-native DDLs, and user context sanitization.
+- 📦 **[Cache Abstraction & Redis Integration](docs/tutorials/12_caching_and_redis.md)**:
+  Multi-driver cache engine, TTL expirations, and Actuator health integration.
+- ⏰ **[Distributed Scheduling & ShedLock](docs/tutorials/13_distributed_scheduler_and_shedlock.md)**:
+  Cluster-safe cron tasks, database locking, and multi-replica safety.
+- 📡 **[Event-Driven Architecture & Outbox](docs/tutorials/09_event_driven_architecture.md)**:
+  Domain Pub/Sub EventBus, Transactional Outbox, automatic retries, and Dead Letter Queue.
+
+### 📊 Observability & Testing
+- 📊 **[Actuator Diagnostics & Observability](docs/tutorials/04_actuator_observability.md)**:
+  Glassmorphic dashboard, health probes, metrics, goroutine dumps, and DLQ management.
+- 📊 **[Custom Health Indicators & Telemetry](docs/tutorials/24_custom_actuator_health_and_telemetry.md)**:
+  `web.RegisterHealthCheck`, external ping health indicators, and Kubernetes probe privacy.
+- 📝 **[Structured Logging & Distributed Tracing](docs/tutorials/15_structured_logging_and_tracing.md)**:
+  `log/slog` structured logging, context propagation (`request_id`, `trace_id`), and JSON formats.
+- 🧪 **[Unit & Integration Testing Guide](docs/tutorials/16_integration_and_unit_testing.md)**:
+  `SprinGoTestContext`, fluent HTTP client, automatic DB rollback, and bean mocking.
+
+---
+
 ## 🔐 Security & Safety
 
 - **Actuator Health Privacy**: Public unauthenticated `GET /actuator/health` returns minimal status `{"status": "UP"}` for load balancers and Kubernetes probes without exposing database connection pool metrics, goroutines, or system topology. Authenticated requests (and the embedded Glassmorphic Admin Dashboard via Basic Auth) receive full detailed component metrics.
