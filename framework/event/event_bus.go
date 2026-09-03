@@ -263,7 +263,7 @@ func (p *defaultEventPublisher) dispatch(ctx context.Context, event interface{},
 	numHandlers := len(handlers)
 	if outboxID > 0 {
 		outboxCountersMu.Lock()
-		var count int32 = int32(numHandlers)
+		var count = int32(numHandlers)
 		outboxCounters[outboxID] = &count
 		outboxCountersMu.Unlock()
 	}

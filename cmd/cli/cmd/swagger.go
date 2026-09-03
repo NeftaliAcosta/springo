@@ -31,7 +31,7 @@ var (
 			swag.Stdout = os.Stdout
 			swag.Stderr = os.Stderr
 			if err := swag.Run(); err != nil {
-				return fmt.Errorf("Swagger generation failed: %w", err)
+				return fmt.Errorf("swagger generation failed: %w", err)
 			}
 			fmt.Println("✅ Swagger documentation generated successfully")
 			return nil

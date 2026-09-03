@@ -225,7 +225,7 @@ func scheduleJobByConfig(name string, conf JobConf, runner JobFunc) {
 
 func scheduleCron(name, spec string, fn JobFunc) {
 	_, err := cronManager.AddFunc(spec, func() {
-		executeWithRecover(name, fn)
+		_ = executeWithRecover(name, fn)
 	})
 	if err != nil {
 		log.Printf("[SprinGo Scheduler] ❌ Error scheduling cron job '%s': %v", name, err)
@@ -255,7 +255,7 @@ func runFixedRateLoop(name string, d time.Duration, fn JobFunc, stopChan chan st
 	for {
 		select {
 		case <-ticker.C:
-			executeWithRecover(name, fn)
+			_ = executeWithRecover(name, fn)
 		case <-stopChan:
 			log.Printf("[SprinGo Scheduler] Stopping fixed-rate loop for job '%s'", name)
 			return
@@ -280,7 +280,7 @@ func scheduleFixedDelay(name, durationStr string, fn JobFunc) {
 
 func runFixedDelayLoop(name string, d time.Duration, fn JobFunc, stopChan chan struct{}) {
 	for {
-		executeWithRecover(name, fn)
+		_ = executeWithRecover(name, fn)
 		select {
 		case <-time.After(d):
 			// Proceed to next iteration

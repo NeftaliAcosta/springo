@@ -14,7 +14,7 @@ This tutorial guides you from installing the tools to deploying your first enter
 
 2. **Install SprinGo CLI**:
    ```bash
-   go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc17
+   go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc18
    ```
 
 ---

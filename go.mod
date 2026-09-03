@@ -1,6 +1,6 @@
 module github.com/NeftaliAcosta/springo
 
-go 1.26.6
+go 1.25.0
 
 require (
 	github.com/felixge/httpsnoop v1.1.0

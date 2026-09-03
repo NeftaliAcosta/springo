@@ -90,7 +90,7 @@ func (c *JwksClient) fetchJWKSLocked() error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("jwks endpoint returned status code %d", resp.StatusCode)

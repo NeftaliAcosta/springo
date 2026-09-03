@@ -18,7 +18,7 @@ import (
 	"github.com/felixge/httpsnoop"
 )
 
-type tracingKey string
+
 
 const (
 	TraceIDKey  string = "springo_trace_id"

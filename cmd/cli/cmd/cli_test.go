@@ -27,7 +27,7 @@ func TestMakeScaffoldingInTempDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	config := ProjectConfig{
 		ProjectName:        filepath.Join(tmpDir, "test_proj"),
@@ -70,7 +70,7 @@ func TestFullEndToEndCLIWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	absRoot, err := filepath.Abs("../../..")
 	if err != nil {

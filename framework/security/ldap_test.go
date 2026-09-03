@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -65,7 +64,7 @@ func TestLdapAuthenticationProvider_RequireTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start mock TCP server: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	go func() {
 		for {
@@ -74,7 +73,7 @@ func TestLdapAuthenticationProvider_RequireTLS(t *testing.T) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				buf := make([]byte, 1024)
 				_, _ = c.Read(buf)
 			}(conn)
@@ -96,8 +95,7 @@ func TestLdapAuthenticationProvider_RequireTLS(t *testing.T) {
 	assert.Contains(t, err.Error(), "requires secure StartTLS, but TLS handshake failed")
 
 	// Case 2: Production profile -> Must fail when StartTLS fails (even if RequireTLS is false)
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "prod")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "prod")
 
 	propsProd := &LdapProperties{
 		Enabled:    true,
@@ -116,7 +114,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start mock TCP server: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	go func() {
 		for {
@@ -125,7 +123,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				buf := make([]byte, 1024)
 				_, _ = c.Read(buf)
 			}(conn)
@@ -135,7 +133,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 	addr := "ldap://" + l.Addr().String()
 
 	// Scenario 1: profile = "production" (alternative prod profile name) with StartTLS failure
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "production")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "production")
 	propsProd2 := &LdapProperties{
 		Enabled:    true,
 		Urls:       addr,
@@ -148,7 +146,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 	assert.Contains(t, err.Error(), "requires secure StartTLS, but TLS handshake failed")
 
 	// Scenario 2: profile = "prod" with StartTLS = false -> Must fail immediately since TLS is required
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "prod")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "prod")
 	propsNoStartTLSProd := &LdapProperties{
 		Enabled:    true,
 		Urls:       addr,
@@ -161,7 +159,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 	assert.Contains(t, err.Error(), "requires secure TLS in production, but StartTLS is disabled")
 
 	// Scenario 3: Non-production profile with StartTLS = false -> Proceed with warning (should not fail with TLS errors, but rather fail on search because mock server doesn't respond)
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "dev")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "dev")
 	propsDev := &LdapProperties{
 		Enabled:          true,
 		Urls:             addr,
@@ -176,7 +174,7 @@ func TestLdapAuthenticationProvider_ExtraTLSScenarios(t *testing.T) {
 	assert.NotContains(t, err.Error(), "requires secure StartTLS")
 	assert.NotContains(t, err.Error(), "requires secure TLS in production")
 
-	os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "")
 }
 
 func TestLdapAuthenticationProvider_InvalidSchemes(t *testing.T) {
@@ -235,7 +233,7 @@ func TestLdapAuthenticationProvider_MockLdapsConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start mock TLS listener: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	go func() {
 		for {
@@ -244,7 +242,7 @@ func TestLdapAuthenticationProvider_MockLdapsConnection(t *testing.T) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				buf := make([]byte, 1024)
 				_, _ = c.Read(buf)
 			}(conn)

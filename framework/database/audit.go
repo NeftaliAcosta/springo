@@ -6,16 +6,13 @@ import (
 	"github.com/NeftaliAcosta/springo/framework/security"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-var (
-	registerAuditOnce sync.Once
-)
+
 
 // EnableAuditing configures GORM callbacks and creates the necessary *_aud tables
 // for any models marked with the `springo:"audited"` struct tag.
@@ -116,7 +113,7 @@ func isSchemaAudited(sch *schema.Schema) (bool, string, error) {
 		return false, "", nil
 	}
 	modelType := sch.ModelType
-	if modelType.Kind() == reflect.Ptr {
+	if modelType.Kind() == reflect.Pointer {
 		modelType = modelType.Elem()
 	}
 	if modelType.Kind() != reflect.Struct {
@@ -141,13 +138,7 @@ func isSchemaAudited(sch *schema.Schema) (bool, string, error) {
 	return false, "", nil
 }
 
-func isAudited(db *gorm.DB) bool {
-	if db.Statement == nil || db.Statement.Schema == nil {
-		return false
-	}
-	isAudited, _, _ := isSchemaAudited(db.Statement.Schema)
-	return isAudited
-}
+
 
 // GetAuditPKDef returns the dialect-appropriate primary key definition string.
 func getAuditPKDef(dialector string) string {
@@ -183,7 +174,7 @@ func quoteIdentifier(dialector string, identifier string) string {
 
 // CreateAuditTable generates and executes dialect-compatible DDL for audit tables.
 func createAuditTable(db *gorm.DB, model interface{}, tableName string) error {
-	dialector := db.Dialector.Name()
+	dialector := db.Name()
 	auditTableName := quoteIdentifier(dialector, tableName+"_aud")
 
 	if db.Migrator().HasTable(tableName + "_aud") {
@@ -333,7 +324,7 @@ func handleAudit(db *gorm.DB, action string) {
 
 	tableName := db.Statement.Schema.Table
 	destVal := reflect.ValueOf(db.Statement.Dest)
-	if destVal.Kind() == reflect.Ptr {
+	if destVal.Kind() == reflect.Pointer {
 		destVal = destVal.Elem()
 	}
 

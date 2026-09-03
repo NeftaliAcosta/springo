@@ -26,7 +26,7 @@ func deepClone(v reflect.Value) reflect.Value {
 	}
 
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return reflect.Zero(v.Type())
 		}

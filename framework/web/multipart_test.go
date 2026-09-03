@@ -48,7 +48,7 @@ func TestDispatchBindsMultipartDTOAlongsidePathParameters(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		content, err := io.ReadAll(file)
 		if err != nil {
 			return nil, err

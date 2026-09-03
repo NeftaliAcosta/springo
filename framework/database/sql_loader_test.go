@@ -73,7 +73,7 @@ func TestExecuteSQLFile(t *testing.T) {
 
 	tmpDir, err := os.MkdirTemp("", "sql_loader_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
 
 	schemaPath := filepath.Join(tmpDir, "schema.sql")
 	dataPath := filepath.Join(tmpDir, "data.sql")

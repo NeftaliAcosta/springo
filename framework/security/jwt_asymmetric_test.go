@@ -122,7 +122,7 @@ func TestJwtProvider_AsymmetricDynamicJWKS(t *testing.T) {
 
 	// Mock JWKS endpoint returning the public key
 	jwksHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nStr := base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.N.Bytes())
+		nStr := base64.RawURLEncoding.EncodeToString(privateKey.N.Bytes())
 		eStr := base64.RawURLEncoding.EncodeToString([]byte{1, 0, 1}) // 65537
 
 		jwks := JSONWebKeySet{
@@ -140,7 +140,7 @@ func TestJwtProvider_AsymmetricDynamicJWKS(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(jwks)
+		_ = json.NewEncoder(w).Encode(jwks)
 	})
 
 	server := httptest.NewServer(jwksHandler)

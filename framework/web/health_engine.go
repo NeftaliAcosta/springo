@@ -221,10 +221,3 @@ func checkDB(name string, db *gorm.DB) ComponentHealth {
 	}
 }
 
-func pingDB(db *gorm.DB) error {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	return sqlDB.Ping()
-}

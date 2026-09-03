@@ -58,7 +58,8 @@ func Connect(props *DataSourceProperties) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	if props.Driver == "sqlite" {
+	switch props.Driver {
+	case "sqlite":
 		sqlDB, err := db.DB()
 		if err == nil {
 			// Apply WAL mode and busy timeout pragmas for concurrent writes safety
@@ -74,7 +75,7 @@ func Connect(props *DataSourceProperties) (*gorm.DB, error) {
 				sqlDB.SetMaxIdleConns(5)
 			}
 		}
-	} else if props.Driver == "postgres" || props.Driver == "mysql" {
+	case "postgres", "mysql":
 		sqlDB, err := db.DB()
 		if err == nil {
 			sqlDB.SetMaxOpenConns(25)

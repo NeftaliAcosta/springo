@@ -42,7 +42,7 @@ func (c *memoryCache) Get(ctx context.Context, key string) (any, bool) {
 	}
 
 	if item.expiration > 0 && time.Now().UnixNano() > item.expiration {
-		c.Evict(ctx, key)
+		_ = c.Evict(ctx, key)
 		return nil, false
 	}
 

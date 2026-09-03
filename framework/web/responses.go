@@ -72,7 +72,7 @@ func setFieldValue(field reflect.Value, value string) {
 func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 // ApiResponse is the standard framework wrapper for all API responses

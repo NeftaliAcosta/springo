@@ -59,7 +59,7 @@ func (p *LdapAuthenticationProvider) Authenticate(username, password string) (st
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to connect to LDAP server: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	userDN, err := p.searchUser(conn, username)
 	if err != nil {
@@ -122,14 +122,14 @@ func (p *LdapAuthenticationProvider) dialLDAP(rawUrl, scheme string) (*ldap.Conn
 	if p.Properties.StartTLS {
 		if startTLSErr := conn.StartTLS(tlsConfig); startTLSErr != nil {
 			if requireTLS {
-				conn.Close()
+				_ = conn.Close()
 				return nil, fmt.Errorf("LDAP connection requires secure StartTLS, but TLS handshake failed: %w", startTLSErr)
 			}
 			log.Printf("⚠️ WARNING: LDAP StartTLS failed (%v). Falling back to INSECURE plaintext transmission on %s!", startTLSErr, rawUrl)
 		}
 	} else {
 		if requireTLS {
-			conn.Close()
+			_ = conn.Close()
 			return nil, fmt.Errorf("LDAP connection requires secure TLS in production, but StartTLS is disabled and URL is not secure (ldaps://)")
 		}
 		log.Printf("⚠️ WARNING: LDAP connection is using INSECURE plaintext transmission on %s (StartTLS is disabled)!", rawUrl)
@@ -146,7 +146,7 @@ func (p *LdapAuthenticationProvider) searchUser(conn *ldap.Conn, username string
 		}
 	}
 
-	filter := strings.Replace(p.Properties.UserSearchFilter, "{0}", ldap.EscapeFilter(username), -1)
+	filter := strings.ReplaceAll(p.Properties.UserSearchFilter, "{0}", ldap.EscapeFilter(username))
 	searchRequest := ldap.NewSearchRequest(
 		p.Properties.BaseDN,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
@@ -190,7 +190,7 @@ func (p *LdapAuthenticationProvider) searchGroups(conn *ldap.Conn, userDN string
 	}
 
 	escapedDN := ldap.EscapeFilter(userDN)
-	groupFilter := strings.Replace(p.Properties.GroupSearchFilter, "{0}", escapedDN, -1)
+	groupFilter := strings.ReplaceAll(p.Properties.GroupSearchFilter, "{0}", escapedDN)
 
 	groupSearch := ldap.NewSearchRequest(
 		groupSearchBase,

@@ -154,8 +154,8 @@ func TestEventBus_RejectionPolicyFallback(t *testing.T) {
 	publisher.Publish(context.Background(), DummyEvent{ID: "1"}) // Satures worker
 
 	// Wait for task 1 to start executing so we know the worker is busy
-	for {
-		if <-startedChan == "1" {
+	for val := range startedChan {
+		if val == "1" {
 			break
 		}
 	}
@@ -171,9 +171,10 @@ func TestEventBus_RejectionPolicyFallback(t *testing.T) {
 	var started3, started4 bool
 	for !started3 || !started4 {
 		id := <-startedChan
-		if id == "3" {
+		switch id {
+		case "3":
 			started3 = true
-		} else if id == "4" {
+		case "4":
 			started4 = true
 		}
 	}
@@ -234,8 +235,8 @@ func TestEventBus_RejectionPolicyDiscard(t *testing.T) {
 	publisher.Publish(context.Background(), DummyEvent{ID: "1"}) // Satures worker
 
 	// Wait for task 1 to start executing so we know the worker is busy
-	for {
-		if <-startedChan == "1" {
+	for val := range startedChan {
+		if val == "1" {
 			break
 		}
 	}
@@ -250,8 +251,8 @@ func TestEventBus_RejectionPolicyDiscard(t *testing.T) {
 	blockChan <- struct{}{}
 
 	// Wait for task 2 to start executing
-	for {
-		if <-startedChan == "2" {
+	for val := range startedChan {
+		if val == "2" {
 			break
 		}
 	}

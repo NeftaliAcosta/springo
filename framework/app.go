@@ -171,7 +171,7 @@ func setupRouter(middlewares []func(http.Handler) http.Handler) chi.Router {
 	})
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("SprinGo - Engine active. Check /swagger/index.html"))
+		_, _ = w.Write([]byte("SprinGo - Engine active. Check /swagger/index.html"))
 	})
 	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
@@ -369,7 +369,7 @@ func (a *Application) Run(ctx context.Context) error {
 		Port int `yaml:"port"`
 	}
 	props := &ServerProps{}
-	a.Loader.BindPrefix("server", props)
+	_ = a.Loader.BindPrefix("server", props)
 
 	port := props.Port
 	if port == 0 && os.Getenv("SPRINGO_PROFILES_ACTIVE") != "test" {

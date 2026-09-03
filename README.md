@@ -5,11 +5,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml"><img src="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
-  <a href="https://pkg.go.dev/github.com/NeftaliAcosta/springo"><img src="https://pkg.go.dev/badge/github.com/NeftaliAcosta/springo.svg" alt="Go Reference"></a>
-  <a href="https://github.com/NeftaliAcosta/springo/releases"><img src="https://img.shields.io/github/v/release/NeftaliAcosta/springo?include_prereleases&color=blue" alt="Release"></a>
-  <a href="https://goreportcard.com/report/github.com/NeftaliAcosta/springo"><img src="https://goreportcard.com/badge/github.com/NeftaliAcosta/springo" alt="Go Report Card"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml"><img
+  src="https://github.com/NeftaliAcosta/springo/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
+  <a href="https://pkg.go.dev/github.com/NeftaliAcosta/springo"><img
+  src="https://pkg.go.dev/badge/github.com/NeftaliAcosta/springo.svg" alt="Go Reference"></a>
+  <a href="https://github.com/NeftaliAcosta/springo/releases"><img
+  src="https://img.shields.io/github/v/release/NeftaliAcosta/springo?include_prereleases&color=blue" alt="Release"></a>
+  <a href="https://goreportcard.com/report/github.com/NeftaliAcosta/springo"><img
+  src="https://goreportcard.com/badge/github.com/NeftaliAcosta/springo" alt="Go Report Card"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg"
+  alt="License: MIT"></a>
 </p>
 
 <p align="center">
@@ -21,7 +26,8 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc17` is a Release Candidate. Validate it in a staging environment before adopting it for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc18` is a Release Candidate. Validate it in a staging environment before adopting it
+> for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
 
 ---
 
@@ -30,7 +36,7 @@
 ### 1. Install SprinGo CLI
 
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc17
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc18
 ```
 
 ### 2. Scaffold a New Enterprise Service
@@ -81,7 +87,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc17)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc18)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -139,7 +145,9 @@ func (c *AuthController) login(
 Cuando un `POST` exitoso conserva semántica `200 OK`, declarar
 `web.Dispatch(c.login, web.WithSuccessStatus(http.StatusOK))`. Sin override, `POST` continúa respondiendo `201`.
 
-`springo run` keeps hot reload fast by compiling only the application. Swagger generation is intentionally explicit because dependency-aware documentation analysis is considerably slower than an incremental Go build. Use `springo swagger --quiet` for silent generation or `springo swagger --main path/to/main.go` for a custom entry point.
+`springo run` keeps hot reload fast by compiling only the application. Swagger generation is intentionally explicit
+because dependency-aware documentation analysis is considerably slower than an incremental Go build. Use `springo
+swagger --quiet` for silent generation or `springo swagger --main path/to/main.go` for a custom entry point.
 
 ---
 
@@ -221,7 +229,8 @@ Access it locally at: `http://localhost:8080/actuator/dashboard`
 
 ## ⚙️ Configuration & Profiles
 
-Configuration is **100% optional**. If omitted, SprinGo falls back to sensible enterprise defaults. Load specific profile files via `SPRINGO_PROFILES_ACTIVE`:
+Configuration is **100% optional**. If omitted, SprinGo falls back to sensible enterprise defaults. Load specific
+profile files via `SPRINGO_PROFILES_ACTIVE`:
 
 Application routes use `/api/v1` by default. Override the prefix without changing the kernel:
 
@@ -231,7 +240,8 @@ server:
     base-path: /platform/v2
 ```
 
-Use `/` to expose application routes without a common prefix. The value must begin with `/`; trailing slashes are normalized. Keep the Swagger `@BasePath` annotation and JWT `public-paths` synchronized with a custom prefix.
+Use `/` to expose application routes without a common prefix. The value must begin with `/`; trailing slashes are
+normalized. Keep the Swagger `@BasePath` annotation and JWT `public-paths` synchronized with a custom prefix.
 
 ### Multipart file binding
 
@@ -254,7 +264,8 @@ func (c *ResourceController) upload(ctx context.Context, dto UploadRequest) (any
 }
 ```
 
-Configure global upload limits in bytes. Content above `memory-threshold` is spooled to temporary storage and cleaned automatically after the controller returns:
+Configure global upload limits in bytes. Content above `memory-threshold` is spooled to temporary storage and cleaned
+automatically after the controller returns:
 
 ```yaml
 server:
@@ -341,10 +352,19 @@ Explore our comprehensive library of step-by-step guides from zero to production
 
 ## 🔐 Security & Safety
 
-- **Actuator Health Privacy**: Public unauthenticated `GET /actuator/health` returns minimal status `{"status": "UP"}` for load balancers and Kubernetes probes without exposing database connection pool metrics, goroutines, or system topology. Authenticated requests (and the embedded Glassmorphic Admin Dashboard via Basic Auth) receive full detailed component metrics.
-- **Production & Staging Hardening**: Profile validation (`prod`, `production`, `staging`, `stage`) automatically enforces 256-bit JWT secret entropy, explicit non-empty Actuator Basic Auth passwords, and restricts algorithms to supported standard types (`HS256`, `RS256`).
-- **Boundary-Safe Path Matching**: Segment-boundary route checking (`/actuator` and `/actuator/*`) prevents sibling paths from accidentally bypassing JWT security or entering Basic Auth.
-- **Modern OWASP Security Headers**: `SecurityHeadersMiddleware` automatically enforces `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`, `X-Permitted-Cross-Domain-Policies: none`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and conditional `HSTS`.
+- **Actuator Health Privacy**: Public unauthenticated `GET /actuator/health` returns minimal status `{"status": "UP"}`
+- for load balancers and Kubernetes probes without exposing database connection pool metrics, goroutines, or system
+- topology. Authenticated requests (and the embedded Glassmorphic Admin Dashboard via Basic Auth) receive full detailed
+- component metrics.
+- **Production & Staging Hardening**: Profile validation (`prod`, `production`, `staging`, `stage`) automatically
+- enforces 256-bit JWT secret entropy, explicit non-empty Actuator Basic Auth passwords, and restricts algorithms to
+- supported standard types (`HS256`, `RS256`).
+- **Boundary-Safe Path Matching**: Segment-boundary route checking (`/actuator` and `/actuator/*`) prevents sibling
+- paths from accidentally bypassing JWT security or entering Basic Auth.
+- **Modern OWASP Security Headers**: `SecurityHeadersMiddleware` automatically enforces `Referrer-Policy:
+- strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`,
+- `X-Permitted-Cross-Domain-Policies: none`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and conditional
+- `HSTS`.
 
 ---
 
@@ -361,3 +381,4 @@ Thank you to all the people who contribute to **SprinGo Framework**!
 ## 📄 License
 
 SprinGo Framework is open-source software licensed under the **[MIT License](LICENSE)**.
+

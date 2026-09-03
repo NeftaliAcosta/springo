@@ -281,7 +281,7 @@ func main() {
 		return fmt.Errorf("failed to create temporary runner: %w", err)
 	}
 	tmpFile := tmp.Name()
-	defer os.Remove(tmpFile)
+	defer func() { _ = os.Remove(tmpFile) }()
 
 	if _, err := tmp.Write(formattedCode); err != nil {
 		_ = tmp.Close()

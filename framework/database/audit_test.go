@@ -94,7 +94,7 @@ func TestAuditing_CreateUpdateDelete(t *testing.T) {
 
 // TestAuditInsert verifies audit record creation on INSERT.
 func testAuditInsert(t *testing.T, db *gorm.DB) {
-	ctx := context.WithValue(context.Background(), "username", "admin_user")
+	ctx := context.WithValue(context.Background(), "username", "admin_user") //nolint:staticcheck // SA1029: framework API uses string context keys by design
 	entity := &TestAuditedEntity{Name: "Juan", Email: "juan@example.com"}
 
 	err := db.WithContext(ctx).Create(entity).Error
@@ -127,7 +127,7 @@ func testAuditInsert(t *testing.T, db *gorm.DB) {
 
 // TestAuditUpdate verifies audit record creation on UPDATE.
 func testAuditUpdate(t *testing.T, db *gorm.DB) {
-	ctx := context.WithValue(context.Background(), "username", "admin_user")
+	ctx := context.WithValue(context.Background(), "username", "admin_user") //nolint:staticcheck // SA1029: framework API uses string context keys by design
 	var entity TestAuditedEntity
 	db.First(&entity)
 
@@ -217,7 +217,7 @@ func testStrictModeMissingKey(t *testing.T, db *gorm.DB) {
 // TestStrictModeSuccess verifies strict user_key mode succeeds when context key is present.
 func testStrictModeSuccess(t *testing.T, db *gorm.DB) {
 	strictEntity := &TestStrictEntity{Name: "Strict With Key"}
-	ctxWithKey := context.WithValue(context.Background(), "company_email", "admin@acme.com")
+	ctxWithKey := context.WithValue(context.Background(), "company_email", "admin@acme.com") //nolint:staticcheck // SA1029: framework API uses string context keys by design
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		return tx.WithContext(ctxWithKey).Create(strictEntity).Error

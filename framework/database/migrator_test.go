@@ -317,7 +317,7 @@ func TestMigrationManager_Heartbeat(t *testing.T) {
 	mgr := NewMigrationManager(db, true)
 
 	// Ensure table exists
-	db.AutoMigrate(&MigrationLock{})
+	_ = db.AutoMigrate(&MigrationLock{})
 	lockedBy := "test-runner-123"
 	initialLock := MigrationLock{
 		LockKey:  "migration_lock",
@@ -470,7 +470,7 @@ func TestMigrationManager_HeartbeatDynamicInterval(t *testing.T) {
 
 	// Register callback to intercept updates on springo_migrations_lock and increment counter,
 	// setting DryRun to true to bypass DB write locks.
-	db.Callback().Update().Before("gorm:update").Register("intercept_hb", func(tx *gorm.DB) {
+	_ = db.Callback().Update().Before("gorm:update").Register("intercept_hb", func(tx *gorm.DB) {
 		if tx.Statement.Table == "springo_migrations_lock" || (tx.Statement.Schema != nil && tx.Statement.Schema.Table == "springo_migrations_lock") {
 			isAcquireOrRelease := false
 			if m, ok := tx.Statement.Dest.(map[string]interface{}); ok {
@@ -543,7 +543,7 @@ func TestMigrationManager_ResetAndRefreshPropagateQueryErrors(t *testing.T) {
 			callbackName := "force_" + tt.name + "_query_error"
 			if err := db.Callback().Query().Before("gorm:query").Register(callbackName, func(tx *gorm.DB) {
 				if tx.Statement.Table == tableName {
-					tx.AddError(expectedErr)
+					_ = tx.AddError(expectedErr)
 				}
 			}); err != nil {
 				t.Fatalf("failed to register query callback: %v", err)
