@@ -2,6 +2,7 @@ package security
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -31,8 +32,12 @@ func (p *JwtProperties) Validate() error {
 	}
 
 	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
-	isDevProfile := profile == "dev" || profile == "development" || profile == "local" || profile == "test"
+	isDevProfile := profile == "" || profile == "default" || profile == "dev" ||
+		profile == "development" || profile == "local" || profile == "test"
 	if isDevProfile {
+		if p.Secret == "springo-ultra-secret-key-for-development" || p.Secret == "default-secret" {
+			slog.Warn("Using default development JWT secret. Set SPRINGO_PROFILES_ACTIVE=prod for production")
+		}
 		return nil
 	}
 
