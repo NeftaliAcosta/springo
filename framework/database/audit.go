@@ -140,9 +140,44 @@ func isAudited(db *gorm.DB) bool {
 	return isAudited
 }
 
+// GetAuditPKDef returns the dialect-appropriate primary key definition string.
+func getAuditPKDef(dialector string) string {
+	switch dialector {
+	case "mysql":
+		return "`audit_id` INT AUTO_INCREMENT PRIMARY KEY"
+	case "postgres":
+		return `"audit_id" BIGSERIAL PRIMARY KEY`
+	default: // sqlite and fallbacks
+		return "audit_id INTEGER PRIMARY KEY AUTOINCREMENT"
+	}
+}
+
+// GetAuditTimestampType returns the dialect-appropriate timestamp type name.
+func getAuditTimestampType(dialector string) string {
+	if dialector == "postgres" {
+		return "TIMESTAMPTZ"
+	}
+	return "DATETIME"
+}
+
+// QuoteIdentifier quotes table and column names according to the target SQL dialect.
+func quoteIdentifier(dialector string, identifier string) string {
+	switch dialector {
+	case "mysql":
+		return fmt.Sprintf("`%s`", identifier)
+	case "postgres":
+		return fmt.Sprintf(`"%s"`, identifier)
+	default: // sqlite
+		return identifier
+	}
+}
+
+// CreateAuditTable generates and executes dialect-compatible DDL for audit tables.
 func createAuditTable(db *gorm.DB, model interface{}, tableName string) error {
-	auditTableName := tableName + "_aud"
-	if db.Migrator().HasTable(auditTableName) {
+	dialector := db.Dialector.Name()
+	auditTableName := quoteIdentifier(dialector, tableName+"_aud")
+
+	if db.Migrator().HasTable(tableName + "_aud") {
 		return nil
 	}
 
@@ -151,17 +186,25 @@ func createAuditTable(db *gorm.DB, model interface{}, tableName string) error {
 		return err
 	}
 
-	var pkDef string
-	switch db.Dialector.Name() {
-	case "mysql":
-		pkDef = "`audit_id` INT AUTO_INCREMENT PRIMARY KEY"
-	default: // sqlite and others
-		pkDef = "audit_id INTEGER PRIMARY KEY AUTOINCREMENT"
-	}
+	pkDef := getAuditPKDef(dialector)
+	tsType := getAuditTimestampType(dialector)
 
-	sql := fmt.Sprintf("CREATE TABLE %s (%s, rev_type VARCHAR(10), rev_user VARCHAR(255), rev_timestamp DATETIME", auditTableName, pkDef)
+	revTypeCol := quoteIdentifier(dialector, "rev_type")
+	revUserCol := quoteIdentifier(dialector, "rev_user")
+	revTimestampCol := quoteIdentifier(dialector, "rev_timestamp")
+
+	sql := fmt.Sprintf(
+		"CREATE TABLE %s (%s, %s VARCHAR(10), %s VARCHAR(255), %s %s",
+		auditTableName,
+		pkDef,
+		revTypeCol,
+		revUserCol,
+		revTimestampCol,
+		tsType,
+	)
+
 	for _, col := range cols {
-		if colSql, ok := buildColumnSql(col, db.Dialector.Name()); ok {
+		if colSql, ok := buildColumnSql(col, dialector); ok {
 			sql += colSql
 		}
 	}
@@ -170,9 +213,8 @@ func createAuditTable(db *gorm.DB, model interface{}, tableName string) error {
 	return db.Exec(sql).Error
 }
 
+// FormatColumnType formats dialect-specific column definitions for DDL table creation.
 func formatColumnType(col gorm.ColumnType) string {
-	// ColumnType preserves dialect-specific definitions such as MySQL ENUM
-	// values. DatabaseTypeName only returns "enum", which produces invalid DDL.
 	if fullType, ok := col.ColumnType(); ok && strings.TrimSpace(fullType) != "" {
 		return fullType
 	}
@@ -180,32 +222,67 @@ func formatColumnType(col gorm.ColumnType) string {
 	dbType := col.DatabaseTypeName()
 	dbTypeLower := strings.ToLower(dbType)
 
-	if strings.Contains(dbTypeLower, "char") || strings.Contains(dbTypeLower, "binary") {
-		if length, ok := col.Length(); ok && length > 0 {
-			return fmt.Sprintf("%s(%d)", dbType, length)
-		}
-	} else if strings.Contains(dbTypeLower, "decimal") || strings.Contains(dbTypeLower, "numeric") {
-		if precision, scale, ok := col.DecimalSize(); ok {
-			return fmt.Sprintf("%s(%d,%d)", dbType, precision, scale)
-		}
-	} else if strings.Contains(dbTypeLower, "datetime") || strings.Contains(dbTypeLower, "timestamp") || strings.Contains(dbTypeLower, "time") {
-		if precision, _, ok := col.DecimalSize(); ok && precision > 0 {
-			return fmt.Sprintf("%s(%d)", dbType, precision)
-		}
+	if formatted, ok := formatCharOrBinaryType(col, dbType, dbTypeLower); ok {
+		return formatted
 	}
+
+	if formatted, ok := formatDecimalType(col, dbType, dbTypeLower); ok {
+		return formatted
+	}
+
+	if formatted, ok := formatDateTimeType(col, dbType, dbTypeLower); ok {
+		return formatted
+	}
+
 	return dbType
 }
 
+// FormatCharOrBinaryType formats CHAR, VARCHAR, or BINARY column types with length specifiers.
+func formatCharOrBinaryType(col gorm.ColumnType, dbType string, dbTypeLower string) (string, bool) {
+	if !strings.Contains(dbTypeLower, "char") && !strings.Contains(dbTypeLower, "binary") {
+		return "", false
+	}
+	if length, ok := col.Length(); ok && length > 0 {
+		return fmt.Sprintf("%s(%d)", dbType, length), true
+	}
+	return "", false
+}
+
+// FormatDecimalType formats DECIMAL or NUMERIC column types with precision and scale.
+func formatDecimalType(col gorm.ColumnType, dbType string, dbTypeLower string) (string, bool) {
+	if !strings.Contains(dbTypeLower, "decimal") && !strings.Contains(dbTypeLower, "numeric") {
+		return "", false
+	}
+	if precision, scale, ok := col.DecimalSize(); ok {
+		return fmt.Sprintf("%s(%d,%d)", dbType, precision, scale), true
+	}
+	return "", false
+}
+
+// FormatDateTimeType formats DATETIME, TIMESTAMP, or TIME column types with precision.
+func formatDateTimeType(col gorm.ColumnType, dbType string, dbTypeLower string) (string, bool) {
+	if !strings.Contains(dbTypeLower, "datetime") &&
+		!strings.Contains(dbTypeLower, "timestamp") &&
+		!strings.Contains(dbTypeLower, "time") {
+		return "", false
+	}
+	if precision, _, ok := col.DecimalSize(); ok && precision > 0 {
+		return fmt.Sprintf("%s(%d)", dbType, precision), true
+	}
+	return "", false
+}
+
+// BuildColumnSql constructs the SQL column definition fragment for audit tables.
 func buildColumnSql(col gorm.ColumnType, dialector string) (string, bool) {
 	colName := col.Name()
 	if colName == "audit_id" {
 		return "", false
 	}
+
+	quotedColName := quoteIdentifier(dialector, colName)
 	dbType := formatColumnType(col)
-	if dialector == "mysql" {
-		return fmt.Sprintf(", `%s` %s", colName, dbType), true
-	}
-	return fmt.Sprintf(", %s %s", colName, dbType), true
+
+	return fmt.Sprintf(", %s %s", quotedColName, dbType), true
 }
 
 func auditCreateCallback(db *gorm.DB) {
@@ -220,10 +297,17 @@ func auditDeleteCallback(db *gorm.DB) {
 	handleAudit(db, "DELETE")
 }
 
+// HandleAudit intercepts GORM create, update, and delete callbacks to produce audit records safely.
 func handleAudit(db *gorm.DB, action string) {
 	if db.Error != nil {
 		return
 	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			_ = db.AddError(fmt.Errorf("audit callback panic: %v", r))
+		}
+	}()
 
 	if strings.HasSuffix(db.Statement.Table, "_aud") || strings.HasSuffix(getTableName(db), "_aud") {
 		return
@@ -232,6 +316,7 @@ func handleAudit(db *gorm.DB, action string) {
 	if db.Statement.Schema == nil {
 		return
 	}
+
 	isAudited, userKey, _ := isSchemaAudited(db.Statement.Schema)
 	if !isAudited {
 		return
@@ -244,7 +329,7 @@ func handleAudit(db *gorm.DB, action string) {
 	}
 
 	if err := writeDestAudits(db, destVal, tableName, action, userKey); err != nil {
-		db.AddError(err) // Abort transaction!
+		_ = db.AddError(err)
 	}
 }
 
@@ -288,6 +373,7 @@ func getRecordMap(db *gorm.DB, itemVal reflect.Value) map[string]interface{} {
 	return record
 }
 
+// GetContextStringValue extracts and formats string representation of context values for key.
 func getContextStringValue(ctx context.Context, key interface{}) (string, bool) {
 	if ctx == nil {
 		return "", false
@@ -304,7 +390,6 @@ func getContextStringValue(ctx context.Context, key interface{}) (string, bool) 
 	case int64:
 		return fmt.Sprintf("%d", v), true
 	case float64:
-		// JSON numbers are parsed as float64, format as integer if no decimal part, or representation
 		return fmt.Sprintf("%.0f", v), true
 	case bool:
 		return fmt.Sprintf("%t", v), true
@@ -313,31 +398,95 @@ func getContextStringValue(ctx context.Context, key interface{}) (string, bool) 
 	}
 }
 
+// SanitizeRevUser validates, cleans, and truncates the username string for audit persistence.
+func sanitizeRevUser(raw string) string {
+	cleaned := strings.TrimSpace(raw)
+	if cleaned == "" {
+		return "anonymous"
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(cleaned))
+	for _, r := range cleaned {
+		if r == '\n' || r == '\r' || r == '\t' {
+			builder.WriteRune(' ')
+			continue
+		}
+		if r < 0x20 || r == 0x7F {
+			continue
+		}
+		builder.WriteRune(r)
+	}
+
+	fields := strings.Fields(builder.String())
+	if len(fields) == 0 {
+		return "anonymous"
+	}
+	result := strings.Join(fields, " ")
+
+	runes := []rune(result)
+	if len(runes) > 255 {
+		return string(runes[:255])
+	}
+
+	return result
+}
+
+// ResolveRevUser extracts and sanitizes the audit user identifier from the request context.
 func resolveRevUser(ctx context.Context, tableName string, userKey string) (string, error) {
 	if ctx == nil {
 		if userKey != "" {
-			return "", fmt.Errorf("audit error: required user context key '%s' not found for audited entity '%s'", userKey, tableName)
+			return "", fmt.Errorf(
+				"audit error: required user context key '%s' not found for audited entity '%s'",
+				userKey,
+				tableName,
+			)
 		}
 		return "anonymous", nil
 	}
 
 	if userKey != "" {
-		if val, ok := getContextStringValue(ctx, userKey); ok && val != "" {
-			return val, nil
-		}
-		return "", fmt.Errorf("audit error: required user context key '%s' not found for audited entity '%s'", userKey, tableName)
+		return resolveUserKey(ctx, userKey, tableName)
 	}
 
-	// Default mode: try standard context keys
-	for _, k := range []interface{}{security.UserContextKey, "username", "user", "user_id", "sub"} {
-		if u, ok := getContextStringValue(ctx, k); ok && u != "" {
-			return u, nil
-		}
-	}
-
-	return "anonymous", nil
+	return resolveDefaultUser(ctx), nil
 }
 
+// ResolveUserKey extracts and sanitizes a user identifier using a specific required context key.
+func resolveUserKey(ctx context.Context, userKey string, tableName string) (string, error) {
+	if val, ok := getContextStringValue(ctx, userKey); ok && val != "" {
+		sanitized := sanitizeRevUser(val)
+		if sanitized != "anonymous" {
+			return sanitized, nil
+		}
+	}
+
+	return "", fmt.Errorf(
+		"audit error: required user context key '%s' not found for audited entity '%s'",
+		userKey,
+		tableName,
+	)
+}
+
+// ResolveDefaultUser iterates standard context keys to extract and sanitize a user identifier.
+func resolveDefaultUser(ctx context.Context) string {
+	keys := []interface{}{security.UserContextKey, "username", "user", "user_id", "sub"}
+	for _, k := range keys {
+		u, ok := getContextStringValue(ctx, k)
+		if !ok || u == "" {
+			continue
+		}
+
+		sanitized := sanitizeRevUser(u)
+		if sanitized != "anonymous" {
+			return sanitized
+		}
+	}
+
+	return "anonymous"
+}
+
+// WriteAuditRecord persists an audit entry into the target entity's _aud table.
 func writeAuditRecord(db *gorm.DB, tableName string, record map[string]interface{}, action string, userKey string) error {
 	auditTableName := tableName + "_aud"
 

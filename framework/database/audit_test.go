@@ -33,26 +33,23 @@ type TestStrictIntEntity struct {
 	SprinGo string `springo:"audited;user_key=tenant_id" gorm:"-"`
 }
 
-func TestAuditing_CreateUpdateDelete(t *testing.T) {
-	// 1. Setup in-memory SQLite DB
+// SetupAuditTestDB initializes an in-memory SQLite database with auditing enabled.
+func setupAuditTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("Failed to open sqlite: %v", err)
 	}
 
-	// 2. Auto-migrate base tables
 	err = db.AutoMigrate(&TestAuditedEntity{}, &TestNonAuditedEntity{}, &TestStrictEntity{}, &TestStrictIntEntity{})
 	if err != nil {
 		t.Fatalf("Failed to auto-migrate: %v", err)
 	}
 
-	// 3. Enable Auditing on the connection
 	err = EnableAuditing(db, &TestAuditedEntity{}, &TestNonAuditedEntity{}, &TestStrictEntity{}, &TestStrictIntEntity{})
 	if err != nil {
 		t.Fatalf("Failed to enable auditing: %v", err)
 	}
 
-	// Verify that test_audited_entities_aud exists and test_non_audited_entities_aud does not
 	if !db.Migrator().HasTable("test_audited_entities_aud") {
 		t.Error("Expected table test_audited_entities_aud to be created")
 	}
@@ -60,16 +57,51 @@ func TestAuditing_CreateUpdateDelete(t *testing.T) {
 		t.Error("Did not expect table test_non_audited_entities_aud to be created")
 	}
 
-	// 4. Test CREATE (INSERT)
+	return db
+}
+
+func TestAuditing_CreateUpdateDelete(t *testing.T) {
+	db := setupAuditTestDB(t)
+
+	t.Run("Create INSERT audit record", func(t *testing.T) {
+		testAuditInsert(t, db)
+	})
+
+	t.Run("Update UPDATE audit record", func(t *testing.T) {
+		testAuditUpdate(t, db)
+	})
+
+	t.Run("Delete DELETE audit record with anonymous fallback", func(t *testing.T) {
+		testAuditDelete(t, db)
+	})
+
+	t.Run("Non-audited entity produces no audit table", func(t *testing.T) {
+		testNonAuditedEntity(t, db)
+	})
+
+	t.Run("Strict mode aborts on missing key", func(t *testing.T) {
+		testStrictModeMissingKey(t, db)
+	})
+
+	t.Run("Strict mode succeeds on correct key", func(t *testing.T) {
+		testStrictModeSuccess(t, db)
+	})
+
+	t.Run("Strict mode succeeds on non-string (int/float64) key", func(t *testing.T) {
+		testStrictModeNonStringKey(t, db)
+	})
+}
+
+// TestAuditInsert verifies audit record creation on INSERT.
+func testAuditInsert(t *testing.T, db *gorm.DB) {
 	ctx := context.WithValue(context.Background(), "username", "admin_user")
 	entity := &TestAuditedEntity{Name: "Juan", Email: "juan@example.com"}
 
-	err = db.WithContext(ctx).Create(entity).Error
+	err := db.WithContext(ctx).Create(entity).Error
 	if err != nil {
 		t.Fatalf("Failed to create record: %v", err)
 	}
 
-	// Verify audit record for INSERT
 	var auditCount int64
 	db.Table("test_audited_entities_aud").Count(&auditCount)
 	if auditCount != 1 {
@@ -91,14 +123,21 @@ func TestAuditing_CreateUpdateDelete(t *testing.T) {
 	if auditData["email"] != "juan@example.com" {
 		t.Errorf("Expected email 'juan@example.com', got %v", auditData["email"])
 	}
+}
 
-	// 5. Test UPDATE
+// TestAuditUpdate verifies audit record creation on UPDATE.
+func testAuditUpdate(t *testing.T, db *gorm.DB) {
+	ctx := context.WithValue(context.Background(), "username", "admin_user")
+	var entity TestAuditedEntity
+	db.First(&entity)
+
 	entity.Name = "Juan Carlos"
-	err = db.WithContext(ctx).Save(entity).Error
+	err := db.WithContext(ctx).Save(&entity).Error
 	if err != nil {
 		t.Fatalf("Failed to update record: %v", err)
 	}
 
+	var auditCount int64
 	db.Table("test_audited_entities_aud").Count(&auditCount)
 	if auditCount != 2 {
 		t.Fatalf("Expected 2 audit records, got %d", auditCount)
@@ -113,13 +152,19 @@ func TestAuditing_CreateUpdateDelete(t *testing.T) {
 	if latestAuditData["name"] != "Juan Carlos" {
 		t.Errorf("Expected name 'Juan Carlos', got %v", latestAuditData["name"])
 	}
+}
 
-	// 6. Test DELETE (with anonymous fallback)
-	err = db.Delete(entity).Error
+// TestAuditDelete verifies audit record creation on DELETE.
+func testAuditDelete(t *testing.T, db *gorm.DB) {
+	var entity TestAuditedEntity
+	db.First(&entity)
+
+	err := db.Delete(&entity).Error
 	if err != nil {
 		t.Fatalf("Failed to delete record: %v", err)
 	}
 
+	var auditCount int64
 	db.Table("test_audited_entities_aud").Count(&auditCount)
 	if auditCount != 3 {
 		t.Fatalf("Expected 3 audit records, got %d", auditCount)
@@ -134,90 +179,91 @@ func TestAuditing_CreateUpdateDelete(t *testing.T) {
 	if deleteAuditData["rev_user"] != "anonymous" {
 		t.Errorf("Expected fallback rev_user 'anonymous', got %v", deleteAuditData["rev_user"])
 	}
+}
 
-	// 7. Verify non-audited table does not produce audit records
+// TestNonAuditedEntity verifies non-audited entities do not produce audit records.
+func testNonAuditedEntity(t *testing.T, db *gorm.DB) {
 	nonAudited := &TestNonAuditedEntity{Name: "SkipMe"}
-	err = db.Create(nonAudited).Error
+	err := db.Create(nonAudited).Error
 	if err != nil {
 		t.Fatalf("Failed to create non-audited record: %v", err)
 	}
 
-	// Still should have no audit table and no errors
 	if db.Migrator().HasTable("test_non_audited_entities_aud") {
 		t.Error("Non-audited entity should not have an audit table")
 	}
+}
 
-	// 8. Verify STRICT user_key mode (abort on missing key)
-	t.Run("Strict mode aborts on missing key", func(t *testing.T) {
-		strictEntity := &TestStrictEntity{Name: "Strict No Key"}
-		ctxEmpty := context.Background()
+// TestStrictModeMissingKey verifies strict user_key mode aborts when required context key is missing.
+func testStrictModeMissingKey(t *testing.T, db *gorm.DB) {
+	strictEntity := &TestStrictEntity{Name: "Strict No Key"}
+	ctxEmpty := context.Background()
 
-		// Should fail due to missing context key "company_email"
-		err = db.Transaction(func(tx *gorm.DB) error {
-			return tx.WithContext(ctxEmpty).Create(strictEntity).Error
-		})
-
-		if err == nil {
-			t.Error("Expected error when saving strict entity without required context key, but got nil")
-		}
-
-		// Verify record was not inserted (rollback worked)
-		var count int64
-		db.Model(&TestStrictEntity{}).Count(&count)
-		if count != 0 {
-			t.Errorf("Expected 0 records in DB after strict rollback, got %d", count)
-		}
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return tx.WithContext(ctxEmpty).Create(strictEntity).Error
 	})
 
-	t.Run("Strict mode succeeds on correct key", func(t *testing.T) {
-		strictEntity := &TestStrictEntity{Name: "Strict With Key"}
-		ctxWithKey := context.WithValue(context.Background(), "company_email", "admin@acme.com")
+	if err == nil {
+		t.Error("Expected error when saving strict entity without required context key, but got nil")
+	}
 
-		err = db.Transaction(func(tx *gorm.DB) error {
-			return tx.WithContext(ctxWithKey).Create(strictEntity).Error
-		})
+	var count int64
+	db.Model(&TestStrictEntity{}).Count(&count)
+	if count != 0 {
+		t.Errorf("Expected 0 records in DB after strict rollback, got %d", count)
+	}
+}
 
-		if err != nil {
-			t.Fatalf("Expected successful save for strict entity, got error: %v", err)
-		}
+// TestStrictModeSuccess verifies strict user_key mode succeeds when context key is present.
+func testStrictModeSuccess(t *testing.T, db *gorm.DB) {
+	strictEntity := &TestStrictEntity{Name: "Strict With Key"}
+	ctxWithKey := context.WithValue(context.Background(), "company_email", "admin@acme.com")
 
-		var count int64
-		db.Model(&TestStrictEntity{}).Count(&count)
-		if count != 1 {
-			t.Errorf("Expected 1 record in DB, got %d", count)
-		}
-
-		var auditData map[string]interface{}
-		db.Table("test_strict_entities_aud").Take(&auditData)
-		if auditData["rev_user"] != "admin@acme.com" {
-			t.Errorf("Expected rev_user 'admin@acme.com', got %v", auditData["rev_user"])
-		}
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return tx.WithContext(ctxWithKey).Create(strictEntity).Error
 	})
 
-	t.Run("Strict mode succeeds on non-string (int/float64) key", func(t *testing.T) {
-		strictEntity := &TestStrictIntEntity{Name: "Strict With Int Key"}
-		ctxWithKey := context.WithValue(context.Background(), "tenant_id", 999) // int type
+	if err != nil {
+		t.Fatalf("Expected successful save for strict entity, got error: %v", err)
+	}
 
-		err = db.Transaction(func(tx *gorm.DB) error {
-			return tx.WithContext(ctxWithKey).Create(strictEntity).Error
-		})
+	var count int64
+	db.Model(&TestStrictEntity{}).Count(&count)
+	if count != 1 {
+		t.Errorf("Expected 1 record in DB, got %d", count)
+	}
 
-		if err != nil {
-			t.Fatalf("Expected successful save for strict entity with int key, got error: %v", err)
-		}
+	var auditData map[string]interface{}
+	db.Table("test_strict_entities_aud").Take(&auditData)
+	if auditData["rev_user"] != "admin@acme.com" {
+		t.Errorf("Expected rev_user 'admin@acme.com', got %v", auditData["rev_user"])
+	}
+}
 
-		var count int64
-		db.Model(&TestStrictIntEntity{}).Count(&count)
-		if count != 1 {
-			t.Errorf("Expected 1 record in DB, got %d", count)
-		}
+// TestStrictModeNonStringKey verifies strict mode works with non-string keys like int.
+func testStrictModeNonStringKey(t *testing.T, db *gorm.DB) {
+	strictEntity := &TestStrictIntEntity{Name: "Strict With Int Key"}
+	ctxWithKey := context.WithValue(context.Background(), "tenant_id", 999)
 
-		var auditData map[string]interface{}
-		db.Table("test_strict_int_entities_aud").Take(&auditData)
-		if auditData["rev_user"] != "999" {
-			t.Errorf("Expected rev_user '999', got %v", auditData["rev_user"])
-		}
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return tx.WithContext(ctxWithKey).Create(strictEntity).Error
 	})
+
+	if err != nil {
+		t.Fatalf("Expected successful save for strict entity with int key, got error: %v", err)
+	}
+
+	var count int64
+	db.Model(&TestStrictIntEntity{}).Count(&count)
+	if count != 1 {
+		t.Errorf("Expected 1 record in DB, got %d", count)
+	}
+
+	var auditData map[string]interface{}
+	db.Table("test_strict_int_entities_aud").Take(&auditData)
+	if auditData["rev_user"] != "999" {
+		t.Errorf("Expected rev_user '999', got %v", auditData["rev_user"])
+	}
 }
 
 func TestAuditing_InvalidTagFormat(t *testing.T) {
@@ -244,4 +290,72 @@ func TestAuditing_InvalidTagFormat(t *testing.T) {
 	if !strings.Contains(err.Error(), "unknown parameter") {
 		t.Errorf("Expected error to contain 'unknown parameter', got: %v", err)
 	}
+}
+
+func TestSanitizeRevUser(t *testing.T) {
+	longString := strings.Repeat("a", 300)
+
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "Standard valid user", input: "admin_user", expected: "admin_user"},
+		{name: "Padded whitespace", input: "  user@domain.com  ", expected: "user@domain.com"},
+		{name: "Control characters and newlines", input: "admin\r\nuser\tname", expected: "admin user name"},
+		{name: "Null byte stripping", input: "user\x00hacker", expected: "userhacker"},
+		{name: "Empty string fallback", input: "", expected: "anonymous"},
+		{name: "Whitespace only fallback", input: "    ", expected: "anonymous"},
+		{name: "Truncation to 255 chars", input: longString, expected: strings.Repeat("a", 255)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := sanitizeRevUser(tc.input)
+			if result != tc.expected {
+				t.Errorf("expected '%s', got '%s'", tc.expected, result)
+			}
+			if len([]rune(result)) > 255 {
+				t.Errorf("result length %d exceeds max 255 chars", len([]rune(result)))
+			}
+		})
+	}
+}
+
+func TestAuditDDL_DialectHelpers(t *testing.T) {
+	t.Run("MySQL primary key, timestamp, and quoting", func(t *testing.T) {
+		if getAuditPKDef("mysql") != "`audit_id` INT AUTO_INCREMENT PRIMARY KEY" {
+			t.Errorf("unexpected MySQL PK def: %s", getAuditPKDef("mysql"))
+		}
+		if getAuditTimestampType("mysql") != "DATETIME" {
+			t.Errorf("unexpected MySQL timestamp type: %s", getAuditTimestampType("mysql"))
+		}
+		if quoteIdentifier("mysql", "users_aud") != "`users_aud`" {
+			t.Errorf("unexpected MySQL quoted table: %s", quoteIdentifier("mysql", "users_aud"))
+		}
+	})
+
+	t.Run("PostgreSQL primary key, timestamp, and quoting", func(t *testing.T) {
+		if getAuditPKDef("postgres") != `"audit_id" BIGSERIAL PRIMARY KEY` {
+			t.Errorf("unexpected Postgres PK def: %s", getAuditPKDef("postgres"))
+		}
+		if getAuditTimestampType("postgres") != "TIMESTAMPTZ" {
+			t.Errorf("unexpected Postgres timestamp type: %s", getAuditTimestampType("postgres"))
+		}
+		if quoteIdentifier("postgres", "users_aud") != `"users_aud"` {
+			t.Errorf("unexpected Postgres quoted table: %s", quoteIdentifier("postgres", "users_aud"))
+		}
+	})
+
+	t.Run("SQLite primary key, timestamp, and quoting fallback", func(t *testing.T) {
+		if getAuditPKDef("sqlite") != "audit_id INTEGER PRIMARY KEY AUTOINCREMENT" {
+			t.Errorf("unexpected SQLite PK def: %s", getAuditPKDef("sqlite"))
+		}
+		if getAuditTimestampType("sqlite") != "DATETIME" {
+			t.Errorf("unexpected SQLite timestamp type: %s", getAuditTimestampType("sqlite"))
+		}
+		if quoteIdentifier("sqlite", "users_aud") != "users_aud" {
+			t.Errorf("unexpected SQLite quoted table: %s", quoteIdentifier("sqlite", "users_aud"))
+		}
+	})
 }

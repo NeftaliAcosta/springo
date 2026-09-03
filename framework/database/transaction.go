@@ -81,53 +81,16 @@ func Transactional(ctx context.Context, fn func(ctx context.Context) error, opts
 	switch cfg.propagation {
 	case PropagationRequired:
 		if activeTx != nil {
-			return fn(ctx)
+			return executeInActiveTx(ctx, activeTx, fn)
 		}
 		return executeInNewTx(ctx, fn)
 
 	case PropagationRequiresNew:
-		suspendedCtx := ctx
-		if activeTx != nil {
-			// Suspend active transaction by removing transaction context variables
-			suspendedCtx = context.WithValue(ctx, txKey, nil)
-			suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
-		}
-		return executeInNewTx(suspendedCtx, fn)
+		return executeInRequiresNew(ctx, activeTx, fn)
 
 	case PropagationNested:
 		if activeTx != nil {
-			spName := fmt.Sprintf("sp_%p_%d", &fn, activeTx.RowsAffected)
-			if err := activeTx.SavePoint(spName).Error; err != nil {
-				return fmt.Errorf("failed to establish savepoint %s: %w", spName, err)
-			}
-			var initialLen int
-			buffer, ok := ctx.Value(eventsKey).(*[]interface{})
-			if ok && buffer != nil {
-				initialLen = len(*buffer)
-			}
-
-			defer func() {
-				if r := recover(); r != nil {
-					if err := activeTx.RollbackTo(spName).Error; err != nil {
-						log.Printf("⚠️ [Transaction] Rollback to savepoint %s failed on panic: %v", spName, err)
-					}
-					if ok && buffer != nil {
-						*buffer = (*buffer)[:initialLen]
-					}
-					panic(r)
-				}
-			}()
-
-			if executionErr := fn(ctx); executionErr != nil {
-				if rollbackErr := activeTx.RollbackTo(spName).Error; rollbackErr != nil {
-					return fmt.Errorf("transaction execution error: %v, and failed to rollback to savepoint %s: %w", executionErr, spName, rollbackErr)
-				}
-				if ok && buffer != nil {
-					*buffer = (*buffer)[:initialLen]
-				}
-				return executionErr
-			}
-			return nil
+			return executeInNestedTx(ctx, activeTx, fn)
 		}
 		return executeInNewTx(ctx, fn)
 
@@ -135,19 +98,13 @@ func Transactional(ctx context.Context, fn func(ctx context.Context) error, opts
 		return fn(ctx)
 
 	case PropagationNotSupported:
-		if activeTx != nil {
-			// Suspend active transaction for this block execution
-			suspendedCtx := context.WithValue(ctx, txKey, nil)
-			suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
-			return fn(suspendedCtx)
-		}
-		return fn(ctx)
+		return executeInNotSupported(ctx, activeTx, fn)
 
 	case PropagationMandatory:
 		if activeTx == nil {
 			return fmt.Errorf("transaction propagation MANDATORY failed: no active transaction found in context")
 		}
-		return fn(ctx)
+		return executeInActiveTx(ctx, activeTx, fn)
 
 	case PropagationNever:
 		if activeTx != nil {
@@ -160,6 +117,87 @@ func Transactional(ctx context.Context, fn func(ctx context.Context) error, opts
 	}
 }
 
+// ExecuteInActiveTx runs fn within an existing active transaction with error and panic recovery.
+func executeInActiveTx(ctx context.Context, activeTx *gorm.DB, fn func(ctx context.Context) error) error {
+	defer func() {
+		if r := recover(); r != nil {
+			_ = activeTx.AddError(fmt.Errorf("transaction panic: %v", r))
+			panic(r)
+		}
+	}()
+
+	if err := fn(ctx); err != nil {
+		_ = activeTx.AddError(err)
+		return err
+	}
+
+	return nil
+}
+
+// ExecuteInRequiresNew suspends active transaction context and executes fn in a new physical transaction.
+func executeInRequiresNew(ctx context.Context, activeTx *gorm.DB, fn func(ctx context.Context) error) error {
+	suspendedCtx := ctx
+	if activeTx != nil {
+		suspendedCtx = context.WithValue(ctx, txKey, nil)
+		suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
+	}
+	return executeInNewTx(suspendedCtx, fn)
+}
+
+// ExecuteInNotSupported suspends active transaction context and executes fn without transaction.
+func executeInNotSupported(ctx context.Context, activeTx *gorm.DB, fn func(ctx context.Context) error) error {
+	if activeTx != nil {
+		suspendedCtx := context.WithValue(ctx, txKey, nil)
+		suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
+		return fn(suspendedCtx)
+	}
+	return fn(ctx)
+}
+
+// ExecuteInNestedTx executes fn within a nested transaction savepoint with rollback guarantees.
+func executeInNestedTx(ctx context.Context, activeTx *gorm.DB, fn func(ctx context.Context) error) error {
+	spName := fmt.Sprintf("sp_%p_%d", &fn, activeTx.RowsAffected)
+	if err := activeTx.SavePoint(spName).Error; err != nil {
+		return fmt.Errorf("failed to establish savepoint %s: %w", spName, err)
+	}
+
+	var initialLen int
+	buffer, ok := ctx.Value(eventsKey).(*[]interface{})
+	if ok && buffer != nil {
+		initialLen = len(*buffer)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			if err := activeTx.RollbackTo(spName).Error; err != nil {
+				log.Printf("⚠️ [Transaction] Rollback to savepoint %s failed on panic: %v", spName, err)
+			}
+			if ok && buffer != nil {
+				*buffer = (*buffer)[:initialLen]
+			}
+			panic(r)
+		}
+	}()
+
+	if executionErr := fn(ctx); executionErr != nil {
+		if rollbackErr := activeTx.RollbackTo(spName).Error; rollbackErr != nil {
+			return fmt.Errorf(
+				"transaction execution error: %v, and failed to rollback to savepoint %s: %w",
+				executionErr,
+				spName,
+				rollbackErr,
+			)
+		}
+		if ok && buffer != nil {
+			*buffer = (*buffer)[:initialLen]
+		}
+		return executionErr
+	}
+
+	return nil
+}
+
+// ExecuteInNewTx starts a new physical GORM transaction and executes fn with rollback safety on error or panic.
 func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	db := ioc.GetContainer().GetDB()
 	if db == nil {
@@ -173,7 +211,7 @@ func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) err
 
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(r)
 		}
 	}()
@@ -183,12 +221,18 @@ func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) err
 	txCtx = context.WithValue(txCtx, eventsKey, &eventBuffer)
 
 	if err := fn(txCtx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 
+	if tx.Error != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("transaction aborted due to GORM error: %w", tx.Error)
+	}
+
 	if err := tx.Commit().Error; err != nil {
-		return err
+		_ = tx.Rollback()
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	if onPostCommit != nil {
