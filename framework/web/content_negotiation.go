@@ -126,7 +126,7 @@ func ToXMLValue(val any) any {
 
 	v := reflect.ValueOf(val)
 	// Handle pointers and interfaces
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		if v.IsNil() {
 			return nil
 		}

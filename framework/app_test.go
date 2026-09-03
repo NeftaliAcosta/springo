@@ -3,14 +3,14 @@ package framework
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/NeftaliAcosta/springo/framework/ioc"
 	"github.com/NeftaliAcosta/springo/framework/lifecycle"
 	"github.com/NeftaliAcosta/springo/framework/scheduler"
-	"net/http"
-	"os"
-	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -27,8 +27,7 @@ func TestApplication_Lifecycle(t *testing.T) {
 	})
 
 	// Set test profile so it doesn't load physical schema/data files
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	var lifecycleCalls []string
 	lifecycle.RegisterInitializer("test-initializer", 0, func(context.Context) error {
@@ -100,8 +99,7 @@ func TestApplication_BootstrapE_Success(t *testing.T) {
 		config.ResetProperties()
 	})
 
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	app, err := BootstrapE(Options{
 		DisableBanner: true,
@@ -121,8 +119,7 @@ func TestApplication_BootstrapE_Failure(t *testing.T) {
 		config.ResetProperties()
 	})
 
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	scheduler.Register("AuthTokenJob", func(ctx context.Context) error {
 		return fmt.Errorf("mocked critical auth token failure")
@@ -146,8 +143,7 @@ func TestApplication_BootstrapE_InitializerFailure(t *testing.T) {
 		config.ResetProperties()
 	})
 
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	lifecycle.RegisterInitializer("failing-initializer", 0, func(context.Context) error {
 		return fmt.Errorf("mocked initializer failure")
@@ -169,8 +165,7 @@ func TestApplication_Run_ReadyFailureShutsDown(t *testing.T) {
 		config.ResetProperties()
 	})
 
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	shutdownCalled := false
 	lifecycle.RegisterReady("failing-ready", 0, func(context.Context) error {
@@ -204,8 +199,7 @@ func TestApplication_RunAndShutdownFinalizesOnCancellation(t *testing.T) {
 		config.ResetProperties()
 	})
 
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
-	defer os.Unsetenv("SPRINGO_PROFILES_ACTIVE")
+	t.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 
 	shutdownCalled := false
 	lifecycle.RegisterShutdown("test-shutdown", 0, func(context.Context) error {

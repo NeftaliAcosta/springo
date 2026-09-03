@@ -49,7 +49,7 @@ func TestMultiDB_AuditingAndMigration_SQLite(t *testing.T) {
 
 	setupMultiDBEntity(t, db)
 
-	ctx := context.WithValue(context.Background(), "username", "multidb_user")
+	ctx := context.WithValue(context.Background(), "username", "multidb_user") //nolint:staticcheck // Framework audit uses string context keys
 	entity := &MultiDBTestEntity{Title: "MultiDB Integration Test"}
 
 	err = db.WithContext(ctx).Create(entity).Error
@@ -147,7 +147,7 @@ func TestMultiDB_PostgreSQL_Integration(t *testing.T) {
 
 	setupMultiDBEntity(t, db)
 
-	ctx := context.WithValue(context.Background(), "username", "pg_audit_user")
+	ctx := context.WithValue(context.Background(), "username", "pg_audit_user") //nolint:staticcheck // Framework audit uses string context keys
 	entity := &MultiDBTestEntity{Title: "Postgres Test"}
 
 	err = db.WithContext(ctx).Create(entity).Error
@@ -182,7 +182,7 @@ func TestMultiDB_MySQL_Integration(t *testing.T) {
 
 	setupMultiDBEntity(t, db)
 
-	ctx := context.WithValue(context.Background(), "username", "mysql_audit_user")
+	ctx := context.WithValue(context.Background(), "username", "mysql_audit_user") //nolint:staticcheck // Framework audit uses string context keys
 	entity := &MultiDBTestEntity{Title: "MySQL Test"}
 
 	err = db.WithContext(ctx).Create(entity).Error

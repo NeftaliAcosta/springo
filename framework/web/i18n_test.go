@@ -12,9 +12,7 @@ import (
 )
 
 func TestMessageSource_FlattenAndGet(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "i18n_test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	esContent := `
 user:
@@ -32,7 +30,7 @@ validation:
 generic: "Hello {0}, welcome to {1}!"
 `
 
-	err = os.WriteFile(filepath.Join(tmpDir, "messages_es.yaml"), []byte(esContent), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "messages_es.yaml"), []byte(esContent), 0644)
 	require.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(tmpDir, "messages.yaml"), []byte(enContent), 0644)

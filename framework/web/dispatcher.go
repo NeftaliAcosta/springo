@@ -213,7 +213,7 @@ func resolveSingleArgument(paramType reflect.Type, r *http.Request) (reflect.Val
 }
 
 func bindAndValidateDTO(w http.ResponseWriter, r *http.Request, paramType reflect.Type, groups []interface{}) (reflect.Value, bool) {
-	isPtr := paramType.Kind() == reflect.Ptr
+	isPtr := paramType.Kind() == reflect.Pointer
 	baseType := paramType
 	if isPtr {
 		baseType = paramType.Elem()

@@ -21,7 +21,7 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, schema interface{}) bool
 // BindRequest populates a struct with Path and Query parameters based on tags
 func BindRequest(r *http.Request, dest interface{}) error {
 	val := reflect.ValueOf(dest)
-	if val.Kind() != reflect.Ptr || val.Elem().Kind() != reflect.Struct {
+	if val.Kind() != reflect.Pointer || val.Elem().Kind() != reflect.Struct {
 		return nil // Nothing to bind if it's not a pointer to a struct
 	}
 

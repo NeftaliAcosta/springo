@@ -17,7 +17,7 @@ import (
 )
 
 func init() {
-	os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
+	_ = os.Setenv("SPRINGO_PROFILES_ACTIVE", "test")
 }
 
 type DummyEvent struct {

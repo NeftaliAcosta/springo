@@ -243,7 +243,7 @@ func testStrictModeSuccess(t *testing.T, db *gorm.DB) {
 // TestStrictModeNonStringKey verifies strict mode works with non-string keys like int.
 func testStrictModeNonStringKey(t *testing.T, db *gorm.DB) {
 	strictEntity := &TestStrictIntEntity{Name: "Strict With Int Key"}
-	ctxWithKey := context.WithValue(context.Background(), "tenant_id", 999)
+	ctxWithKey := context.WithValue(context.Background(), "tenant_id", 999) //nolint:staticcheck // Framework audit uses string context keys by design
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		return tx.WithContext(ctxWithKey).Create(strictEntity).Error
@@ -323,39 +323,53 @@ func TestSanitizeRevUser(t *testing.T) {
 }
 
 func TestAuditDDL_DialectHelpers(t *testing.T) {
-	t.Run("MySQL primary key, timestamp, and quoting", func(t *testing.T) {
-		if getAuditPKDef("mysql") != "`audit_id` INT AUTO_INCREMENT PRIMARY KEY" {
-			t.Errorf("unexpected MySQL PK def: %s", getAuditPKDef("mysql"))
-		}
-		if getAuditTimestampType("mysql") != "DATETIME" {
-			t.Errorf("unexpected MySQL timestamp type: %s", getAuditTimestampType("mysql"))
-		}
-		if quoteIdentifier("mysql", "users_aud") != "`users_aud`" {
-			t.Errorf("unexpected MySQL quoted table: %s", quoteIdentifier("mysql", "users_aud"))
-		}
-	})
+	testCases := []struct {
+		name           string
+		dialect        string
+		expectedPK     string
+		expectedTS     string
+		expectedQuoted string
+	}{
+		{
+			name:           "MySQL primary key, timestamp, and quoting",
+			dialect:        "mysql",
+			expectedPK:     "`audit_id` INT AUTO_INCREMENT PRIMARY KEY",
+			expectedTS:     "DATETIME",
+			expectedQuoted: "`users_aud`",
+		},
+		{
+			name:           "PostgreSQL primary key, timestamp, and quoting",
+			dialect:        "postgres",
+			expectedPK:     `"audit_id" BIGSERIAL PRIMARY KEY`,
+			expectedTS:     "TIMESTAMPTZ",
+			expectedQuoted: `"users_aud"`,
+		},
+		{
+			name:           "SQLite primary key, timestamp, and quoting fallback",
+			dialect:        "sqlite",
+			expectedPK:     "audit_id INTEGER PRIMARY KEY AUTOINCREMENT",
+			expectedTS:     "DATETIME",
+			expectedQuoted: "users_aud",
+		},
+	}
 
-	t.Run("PostgreSQL primary key, timestamp, and quoting", func(t *testing.T) {
-		if getAuditPKDef("postgres") != `"audit_id" BIGSERIAL PRIMARY KEY` {
-			t.Errorf("unexpected Postgres PK def: %s", getAuditPKDef("postgres"))
-		}
-		if getAuditTimestampType("postgres") != "TIMESTAMPTZ" {
-			t.Errorf("unexpected Postgres timestamp type: %s", getAuditTimestampType("postgres"))
-		}
-		if quoteIdentifier("postgres", "users_aud") != `"users_aud"` {
-			t.Errorf("unexpected Postgres quoted table: %s", quoteIdentifier("postgres", "users_aud"))
-		}
-	})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertAuditDialectHelper(t, tc.dialect, tc.expectedPK, tc.expectedTS, tc.expectedQuoted)
+		})
+	}
+}
 
-	t.Run("SQLite primary key, timestamp, and quoting fallback", func(t *testing.T) {
-		if getAuditPKDef("sqlite") != "audit_id INTEGER PRIMARY KEY AUTOINCREMENT" {
-			t.Errorf("unexpected SQLite PK def: %s", getAuditPKDef("sqlite"))
-		}
-		if getAuditTimestampType("sqlite") != "DATETIME" {
-			t.Errorf("unexpected SQLite timestamp type: %s", getAuditTimestampType("sqlite"))
-		}
-		if quoteIdentifier("sqlite", "users_aud") != "users_aud" {
-			t.Errorf("unexpected SQLite quoted table: %s", quoteIdentifier("sqlite", "users_aud"))
-		}
-	})
+// AssertAuditDialectHelper verifies primary key, timestamp type, and identifier quoting for a dialect.
+func assertAuditDialectHelper(t *testing.T, dialect, wantPK, wantTS, wantQuoted string) {
+	t.Helper()
+	if got := getAuditPKDef(dialect); got != wantPK {
+		t.Errorf("unexpected %s PK def: %s", dialect, got)
+	}
+	if got := getAuditTimestampType(dialect); got != wantTS {
+		t.Errorf("unexpected %s timestamp type: %s", dialect, got)
+	}
+	if got := quoteIdentifier(dialect, "users_aud"); got != wantQuoted {
+		t.Errorf("unexpected %s quoted table: %s", dialect, got)
+	}
 }

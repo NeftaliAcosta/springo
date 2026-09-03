@@ -569,7 +569,7 @@ func dispatchSinglePendingEvent(publisher *defaultEventPublisher, pe OutboxEvent
 	}
 
 	var finalEvent interface{}
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		finalEvent = eventVal
 	} else {
 		finalEvent = reflect.ValueOf(eventVal).Elem().Interface()
@@ -772,7 +772,7 @@ func RedispatchEvent(ctx context.Context, eventName string, payload string) erro
 	for t, h := range listeners {
 		tStr := t.String()
 		tName := t.Name()
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Pointer {
 			tName = t.Elem().Name()
 		}
 

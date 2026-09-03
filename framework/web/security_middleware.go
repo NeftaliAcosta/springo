@@ -96,11 +96,11 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		// Inject all claims as simple string keys for easy context retrieval
 		for k, v := range claims {
-			ctx = context.WithValue(ctx, k, v)
+			ctx = context.WithValue(ctx, k, v) //nolint:staticcheck // Dynamic string keys for claims propagation
 			// Ensure "username" and "user" are synced if "sub" is set
 			if k == "sub" {
-				ctx = context.WithValue(ctx, "username", v)
-				ctx = context.WithValue(ctx, "user", v)
+				ctx = context.WithValue(ctx, "username", v) //nolint:staticcheck // Framework conveniency key
+				ctx = context.WithValue(ctx, "user", v)     //nolint:staticcheck // Framework conveniency key
 			}
 		}
 

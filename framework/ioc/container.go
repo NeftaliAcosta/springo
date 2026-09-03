@@ -460,7 +460,7 @@ func isBeanInstanceAssignable(bean interface{}, paramType reflect.Type, existing
 // SelectBestNameMatch selects the most specific bean name match when multiple candidates are registered.
 func selectBestNameMatch(matches []string, paramType reflect.Type) (string, error) {
 	paramTypeName := paramType.Name()
-	if paramType.Kind() == reflect.Ptr {
+	if paramType.Kind() == reflect.Pointer {
 		paramTypeName = paramType.Elem().Name()
 	}
 
@@ -476,7 +476,7 @@ func selectBestNameMatch(matches []string, paramType reflect.Type) (string, erro
 // Autowire inspects struct fields marked with `spring` tags and injects matching dependencies.
 func (c *ApplicationContainer) autowire(ctx context.Context, bean interface{}) error {
 	val := reflect.ValueOf(bean)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -508,7 +508,7 @@ func (c *ApplicationContainer) autowire(ctx context.Context, bean interface{}) e
 func (c *ApplicationContainer) injectDependencyField(ctx context.Context, fieldVal reflect.Value, field reflect.StructField, tag string) error {
 	if isProviderType(field.Type) {
 		targetType := field.Type
-		isPtr := targetType.Kind() == reflect.Ptr
+		isPtr := targetType.Kind() == reflect.Pointer
 		structType := targetType
 		if isPtr {
 			structType = targetType.Elem()
@@ -541,7 +541,7 @@ func (c *ApplicationContainer) injectDependencyField(ctx context.Context, fieldV
 // IsProviderType checks if a type or pointer to type matches the Provider[T] structural contract:
 // Containing fields Container (*ApplicationContainer), BeanName (string), and method Get(context.Context) (T, error).
 func isProviderType(t reflect.Type) bool {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {

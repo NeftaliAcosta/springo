@@ -39,7 +39,7 @@ func bindMultipartRequest(w http.ResponseWriter, r *http.Request, dest any, prop
 	}
 
 	value := reflect.ValueOf(dest)
-	if value.Kind() != reflect.Ptr || value.IsNil() || value.Elem().Kind() != reflect.Struct {
+	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
 		return nil
 	}
 	value = value.Elem()
@@ -92,7 +92,7 @@ func multipartProperties() MultipartProperties {
 }
 
 func isMultipartFilePointer(t reflect.Type) bool {
-	return t.Kind() == reflect.Ptr && t.Elem() == multipartFileHeaderType
+	return t.Kind() == reflect.Pointer && t.Elem() == multipartFileHeaderType
 }
 
 func isMultipartFileSlice(t reflect.Type) bool {

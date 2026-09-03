@@ -66,7 +66,7 @@ func Validate(s interface{}, groups ...interface{}) error {
 		return nil
 	}
 
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			return nil
 		}
@@ -169,66 +169,72 @@ func TranslateValidationErrors(errs validator.ValidationErrors) map[string]strin
 func TranslateValidationErrorsCtx(ctx context.Context, errs validator.ValidationErrors) map[string]string {
 	errMap := make(map[string]string, len(errs))
 	locale := GetLocale(ctx)
-
-	var ms *MessageSource
-	if bean := ioc.GetContainer().GetBean("messageSource"); bean != nil {
-		if source, ok := bean.(*MessageSource); ok {
-			ms = source
-		}
-	}
+	ms := resolveMessageSource()
 
 	for _, e := range errs {
-		field := e.Field()
-		tag := e.Tag()
-		param := e.Param()
-
-		translated := ""
-		if ms != nil {
-			// Find struct name from Namespace if possible (e.g. "UserRequest.email" -> "UserRequest")
-			nsParts := strings.Split(e.Namespace(), ".")
-			sName := ""
-			if len(nsParts) > 1 {
-				sName = nsParts[len(nsParts)-2]
-			}
-
-			key1 := ""
-			if sName != "" {
-				key1 = fmt.Sprintf("validation.%s.%s.%s", sName, field, tag)
-			}
-			key2 := fmt.Sprintf("validation.%s.%s", field, tag)
-			key3 := fmt.Sprintf("validation.%s", tag)
-
-			if sName != "" && hasKey(ms, locale, key1) {
-				if param != "" {
-					translated = ms.GetMessage(locale, key1, param)
-				} else {
-					translated = ms.GetMessage(locale, key1)
-				}
-			} else if hasKey(ms, locale, key2) {
-				if param != "" {
-					translated = ms.GetMessage(locale, key2, param)
-				} else {
-					translated = ms.GetMessage(locale, key2)
-				}
-			} else if hasKey(ms, locale, key3) {
-				if param != "" {
-					translated = ms.GetMessage(locale, key3, param)
-				} else {
-					translated = ms.GetMessage(locale, key3)
-				}
-			}
-		}
-
-		if translated == "" {
-			translated = e.Translate(trans)
-		}
-
-		errMap[field] = translated
+		errMap[e.Field()] = translateFieldError(ms, locale, e)
 	}
 
 	return errMap
 }
 
+// resolveMessageSource retrieves the MessageSource bean from the IoC container if available.
+func resolveMessageSource() *MessageSource {
+	bean := ioc.GetContainer().GetBean("messageSource")
+	if bean == nil {
+		return nil
+	}
+	if source, ok := bean.(*MessageSource); ok {
+		return source
+	}
+	return nil
+}
+
+// translateFieldError translates a single validation error into a human-readable message.
+func translateFieldError(ms *MessageSource, locale string, e validator.FieldError) string {
+	if translated := translateWithSource(ms, locale, e); translated != "" {
+		return translated
+	}
+	return e.Translate(trans)
+}
+
+// translateWithSource attempts to translate a validation error using the message source.
+func translateWithSource(ms *MessageSource, locale string, e validator.FieldError) string {
+	if ms == nil {
+		return ""
+	}
+	keys := buildValidationCandidateKeys(e)
+	for _, k := range keys {
+		if !hasKey(ms, locale, k) {
+			continue
+		}
+		if param := e.Param(); param != "" {
+			return ms.GetMessage(locale, k, param)
+		}
+		return ms.GetMessage(locale, k)
+	}
+	return ""
+}
+
+// buildValidationCandidateKeys constructs fallback message keys for a validation error.
+func buildValidationCandidateKeys(e validator.FieldError) []string {
+	field := e.Field()
+	tag := e.Tag()
+	nsParts := strings.Split(e.Namespace(), ".")
+	var keys []string
+	if len(nsParts) > 1 {
+		if sName := nsParts[len(nsParts)-2]; sName != "" {
+			keys = append(keys, fmt.Sprintf("validation.%s.%s.%s", sName, field, tag))
+		}
+	}
+	keys = append(keys,
+		fmt.Sprintf("validation.%s.%s", field, tag),
+		fmt.Sprintf("validation.%s", tag),
+	)
+	return keys
+}
+
+// hasKey checks whether the given key exists in the message source for the target locale or fallbacks.
 func hasKey(ms *MessageSource, locale, key string) bool {
 	locale = strings.ToLower(locale)
 	if _, found := ms.lookup(locale, key); found {

@@ -1,7 +1,6 @@
 package security
 
 import (
-	"os"
 	"testing"
 )
 
@@ -80,9 +79,7 @@ func TestJwtProperties_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
-			oldProfile := os.Getenv("SPRINGO_PROFILES_ACTIVE")
-			defer os.Setenv("SPRINGO_PROFILES_ACTIVE", oldProfile)
-			os.Setenv("SPRINGO_PROFILES_ACTIVE", tt.profile)
+			t.Setenv("SPRINGO_PROFILES_ACTIVE", tt.profile)
 
 			props := &JwtProperties{
 				Secret:     tt.secret,

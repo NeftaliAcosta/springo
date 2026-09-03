@@ -71,9 +71,7 @@ func TestExecuteSQLFile(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
-	tmpDir, err := os.MkdirTemp("", "sql_loader_test")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	schemaPath := filepath.Join(tmpDir, "schema.sql")
 	dataPath := filepath.Join(tmpDir, "data.sql")
@@ -129,9 +127,7 @@ func TestExecuteSQLFile_TransactionRollback(t *testing.T) {
 	err = db.Exec("CREATE TABLE test_entities (id INTEGER PRIMARY KEY, code TEXT UNIQUE);").Error
 	require.NoError(t, err)
 
-	tmpDir, err := os.MkdirTemp("", "sql_loader_test_rollback")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	dataPath := filepath.Join(tmpDir, "data.sql")
 

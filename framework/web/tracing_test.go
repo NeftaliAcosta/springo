@@ -152,8 +152,8 @@ func TestContextLogger_TraceAndSpan(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, TraceIDKey, "my-trace-id-123")
-	ctx = context.WithValue(ctx, SpanIDKey, "my-span-id-456")
+	ctx = context.WithValue(ctx, TraceIDKey, "my-trace-id-123") //nolint:staticcheck // Shared string key across web/logging
+	ctx = context.WithValue(ctx, SpanIDKey, "my-span-id-456")   //nolint:staticcheck // Shared string key across web/logging
 
 	logger.InfoContext(ctx, "hello telemetry")
 

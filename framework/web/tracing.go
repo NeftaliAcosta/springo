@@ -133,8 +133,8 @@ func TracingMiddleware(next http.Handler) http.Handler {
 		w.Header().Set(TraceHeader, traceID)
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, TraceIDKey, traceID)
-		ctx = context.WithValue(ctx, SpanIDKey, spanID)
+		ctx = context.WithValue(ctx, TraceIDKey, traceID) //nolint:staticcheck // Shared string key across web/logging
+		ctx = context.WithValue(ctx, SpanIDKey, spanID)   //nolint:staticcheck // Shared string key across web/logging
 
 		startTime := time.Now()
 
@@ -188,7 +188,7 @@ func GetTraceID(ctx context.Context) string {
 
 // WithTraceID injects a Trace ID into the context
 func WithTraceID(ctx context.Context, traceID string) context.Context {
-	return context.WithValue(ctx, TraceIDKey, traceID)
+	return context.WithValue(ctx, TraceIDKey, traceID) //nolint:staticcheck // Shared string key across web/logging
 }
 
 // ─── Zipkin Exporter & Spans ───────────────────────────────────────────────

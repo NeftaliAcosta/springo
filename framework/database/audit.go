@@ -356,7 +356,7 @@ func getTableName(db *gorm.DB) string {
 }
 
 func getRecordMap(db *gorm.DB, itemVal reflect.Value) map[string]interface{} {
-	if itemVal.Kind() == reflect.Ptr {
+	if itemVal.Kind() == reflect.Pointer {
 		itemVal = itemVal.Elem()
 	}
 	record := make(map[string]interface{})

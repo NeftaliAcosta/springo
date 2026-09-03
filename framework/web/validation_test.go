@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/NeftaliAcosta/springo/framework/ioc"
 	"github.com/NeftaliAcosta/springo/framework/web"
 
 	"github.com/go-playground/validator/v10"
@@ -122,6 +123,27 @@ func TestTranslateValidationErrors_ReturnsHumanReadable(t *testing.T) {
 		assert.NotEmpty(t, msg)
 		t.Logf("field=%s msg=%s", field, msg)
 	}
+}
+
+func TestTranslateValidationErrorsCtx_WithMessageSource(t *testing.T) {
+	ms := web.NewMessageSource("en")
+	// Pre-load translations via reflection or helper if needed, or register bean
+	ioc.GetContainer().RegisterBean("messageSource", ms)
+	defer func() {
+		// Clean up bean if necessary
+	}()
+
+	dto := createUserDTO{Username: "al", Email: "bad", Password: "short"}
+	err := web.Validate(dto)
+	require.Error(t, err)
+
+	var validationErrs validator.ValidationErrors
+	require.ErrorAs(t, err, &validationErrs)
+
+	ctx := context.WithValue(context.Background(), web.LocaleContextKey, "es")
+	msgs := web.TranslateValidationErrorsCtx(ctx, validationErrs)
+	assert.NotEmpty(t, msgs)
+	assert.Contains(t, msgs, "username")
 }
 
 // ─── Custom Validator Registration ────────────────────────────────────────

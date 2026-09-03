@@ -78,7 +78,9 @@ func (s *userServiceImpl) TriggerBusinessError(ctx context.Context) error {
 			Username: "transactional_test_user",
 			Email:    "test@example.com",
 		})
-		s.repo.Save(txCtx, &user)
+		if err := s.repo.Save(txCtx, &user); err != nil {
+			return err
+		}
 
 		// 2. Force error to trigger Rollback
 		return fmt.Errorf("forced error to trigger @Transactional rollback")
