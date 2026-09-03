@@ -301,6 +301,7 @@ func (c *ApplicationContainer) resolveRequestBean(ctx context.Context, def *Bean
 	return instance, nil
 }
 
+// Instantiate creates a new instance of a bean by invoking its factory function and running autowire.
 func (c *ApplicationContainer) instantiate(ctx context.Context, def *BeanDefinition) (interface{}, error) {
 	factoryVal := reflect.ValueOf(def.Factory)
 	factoryType := factoryVal.Type()
@@ -315,8 +316,18 @@ func (c *ApplicationContainer) instantiate(ctx context.Context, def *BeanDefinit
 	}
 
 	results := factoryVal.Call(args)
-	if len(results) == 0 {
-		return nil, fmt.Errorf("factory for bean '%s' returned no values", def.Name)
+	if len(results) == 0 || len(results) > 2 {
+		return nil, fmt.Errorf(
+			"factory for bean '%s' must return either T or (T, error), got %d return values",
+			def.Name,
+			len(results),
+		)
+	}
+
+	if len(results) == 2 && results[1].Interface() != nil {
+		if factoryErr, ok := results[1].Interface().(error); ok && factoryErr != nil {
+			return nil, fmt.Errorf("factory for bean '%s' failed: %w", def.Name, factoryErr)
+		}
 	}
 
 	bean := results[0].Interface()
@@ -329,26 +340,140 @@ func (c *ApplicationContainer) instantiate(ctx context.Context, def *BeanDefinit
 	return bean, nil
 }
 
-func (c *ApplicationContainer) buildFactoryArgs(ctx context.Context, factoryType reflect.Type, beanName string) ([]reflect.Value, error) {
+// BuildFactoryArgs prepares parameter values for calling a bean factory function.
+func (c *ApplicationContainer) buildFactoryArgs(
+	ctx context.Context,
+	factoryType reflect.Type,
+	beanName string,
+) ([]reflect.Value, error) {
 	args := make([]reflect.Value, factoryType.NumIn())
 	for i := 0; i < factoryType.NumIn(); i++ {
 		paramType := factoryType.In(i)
 
+		// 1. Direct match for *gorm.DB connection
 		if paramType == reflect.TypeOf((*gorm.DB)(nil)) {
-			args[i] = reflect.ValueOf(c.db)
-			continue
+			if c.db != nil {
+				args[i] = reflect.ValueOf(c.db)
+				continue
+			}
 		}
 
+		// 2. Direct match for context.Context interface
 		if paramType.Implements(reflect.TypeOf((*context.Context)(nil)).Elem()) {
 			args[i] = reflect.ValueOf(ctx)
 			continue
 		}
 
-		return nil, fmt.Errorf("unsupported factory parameter type '%s' for bean '%s'", paramType, beanName)
+		// 3. Flexible resolution by registered bean type
+		matchedName, err := c.findBeanNameByType(paramType)
+		if err == nil {
+			resolvedBean, err := c.GetBeanScoped(ctx, matchedName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve dependency '%s' for bean '%s': %w", matchedName, beanName, err)
+			}
+			args[i] = reflect.ValueOf(resolvedBean)
+			continue
+		}
+
+		return nil, fmt.Errorf(
+			"unsupported or unresolvable factory parameter %d of type '%s' for bean '%s': %w",
+			i,
+			paramType,
+			beanName,
+			err,
+		)
 	}
 	return args, nil
 }
 
+// FindBeanNameByType searches for a registered bean name whose type or factory return type is assignable to paramType.
+func (c *ApplicationContainer) findBeanNameByType(paramType reflect.Type) (string, error) {
+	matches := c.findMatchingBeanNames(paramType)
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no bean of type '%s' found in container", paramType)
+	}
+
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+
+	return selectBestNameMatch(matches, paramType)
+}
+
+// FindMatchingBeanNames collects all registered bean names assignable to the specified target type.
+func (c *ApplicationContainer) findMatchingBeanNames(paramType reflect.Type) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var matches []string
+
+	for name, def := range c.definitions {
+		if isDefinitionAssignable(def, paramType) {
+			matches = append(matches, name)
+		}
+	}
+
+	for name, bean := range c.beans {
+		if isBeanInstanceAssignable(bean, paramType, matches, name) {
+			matches = append(matches, name)
+		}
+	}
+
+	return matches
+}
+
+// IsDefinitionAssignable checks whether a bean definition's instance or factory return type matches paramType.
+func isDefinitionAssignable(def *BeanDefinition, paramType reflect.Type) bool {
+	if def.instance != nil && reflect.ValueOf(def.instance).Type().AssignableTo(paramType) {
+		return true
+	}
+
+	if def.Factory == nil {
+		return false
+	}
+
+	factoryVal := reflect.ValueOf(def.Factory)
+	factoryType := factoryVal.Type()
+	if factoryType.Kind() != reflect.Func || factoryType.NumOut() == 0 {
+		return false
+	}
+
+	return factoryType.Out(0).AssignableTo(paramType)
+}
+
+// IsBeanInstanceAssignable checks whether a cached bean instance is assignable to paramType and not already matched.
+func isBeanInstanceAssignable(bean interface{}, paramType reflect.Type, existing []string, name string) bool {
+	if bean == nil {
+		return false
+	}
+
+	for _, matchedName := range existing {
+		if matchedName == name {
+			return false
+		}
+	}
+
+	return reflect.ValueOf(bean).Type().AssignableTo(paramType)
+}
+
+// SelectBestNameMatch selects the most specific bean name match when multiple candidates are registered.
+func selectBestNameMatch(matches []string, paramType reflect.Type) (string, error) {
+	paramTypeName := paramType.Name()
+	if paramType.Kind() == reflect.Ptr {
+		paramTypeName = paramType.Elem().Name()
+	}
+
+	for _, matchName := range matches {
+		if strings.EqualFold(matchName, paramTypeName) {
+			return matchName, nil
+		}
+	}
+
+	return "", fmt.Errorf("ambiguous dependency for type '%s': multiple matching beans found %v", paramType, matches)
+}
+
+// Autowire inspects struct fields marked with `spring` tags and injects matching dependencies.
 func (c *ApplicationContainer) autowire(ctx context.Context, bean interface{}) error {
 	val := reflect.ValueOf(bean)
 	if val.Kind() == reflect.Ptr {
@@ -379,12 +504,25 @@ func (c *ApplicationContainer) autowire(ctx context.Context, bean interface{}) e
 	return nil
 }
 
+// InjectDependencyField sets either a Provider instance or a resolved bean dependency into a target field.
 func (c *ApplicationContainer) injectDependencyField(ctx context.Context, fieldVal reflect.Value, field reflect.StructField, tag string) error {
 	if isProviderType(field.Type) {
-		provider := reflect.New(field.Type).Elem()
-		provider.FieldByName("Container").Set(reflect.ValueOf(c))
-		provider.FieldByName("BeanName").Set(reflect.ValueOf(tag))
-		fieldVal.Set(provider)
+		targetType := field.Type
+		isPtr := targetType.Kind() == reflect.Ptr
+		structType := targetType
+		if isPtr {
+			structType = targetType.Elem()
+		}
+
+		providerStruct := reflect.New(structType).Elem()
+		providerStruct.FieldByName("Container").Set(reflect.ValueOf(c))
+		providerStruct.FieldByName("BeanName").Set(reflect.ValueOf(tag))
+
+		if isPtr {
+			fieldVal.Set(providerStruct.Addr())
+		} else {
+			fieldVal.Set(providerStruct)
+		}
 		return nil
 	}
 
@@ -400,11 +538,38 @@ func (c *ApplicationContainer) injectDependencyField(ctx context.Context, fieldV
 	return nil
 }
 
+// IsProviderType checks if a type or pointer to type matches the Provider[T] structural contract:
+// Containing fields Container (*ApplicationContainer), BeanName (string), and method Get(context.Context) (T, error).
 func isProviderType(t reflect.Type) bool {
-	return t.Kind() == reflect.Struct &&
-		strings.HasPrefix(t.Name(), "Provider[") &&
-		strings.HasSuffix(t.Name(), "]") &&
-		t.PkgPath() == "github.com/NeftaliAcosta/springo/framework/ioc"
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+
+	containerField, hasContainer := t.FieldByName("Container")
+	if !hasContainer || containerField.Type != reflect.TypeOf((*ApplicationContainer)(nil)) {
+		return false
+	}
+
+	beanNameField, hasBeanName := t.FieldByName("BeanName")
+	if !hasBeanName || beanNameField.Type.Kind() != reflect.String {
+		return false
+	}
+
+	getMethod, hasGet := t.MethodByName("Get")
+	if !hasGet || getMethod.Type.NumIn() != 2 || getMethod.Type.NumOut() != 2 {
+		return false
+	}
+
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+	errType := reflect.TypeOf((*error)(nil)).Elem()
+	if getMethod.Type.In(1) != ctxType || getMethod.Type.Out(1) != errType {
+		return false
+	}
+
+	return true
 }
 
 // CreateRequestRegistry instantiates a request scope bean container registry
@@ -461,7 +626,23 @@ func (c *ApplicationContainer) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.beans = make(map[string]interface{})
+	for _, def := range c.definitions {
+		def.instance = nil
+		def.err = nil
+		def.once = sync.Once{}
+	}
+	c.db = nil
+}
+
+// ResetAll removes all initialized bean instances, resets the DB connection,
+// and unregisters all bean definitions and factories (full container reset).
+func (c *ApplicationContainer) ResetAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.beans = make(map[string]interface{})
 	c.definitions = make(map[string]*BeanDefinition)
+	c.repositoryFactories = make(map[string]RepositoryFactory)
+	c.serviceFactories = make(map[string]BeanFactory)
 	c.db = nil
 }
 

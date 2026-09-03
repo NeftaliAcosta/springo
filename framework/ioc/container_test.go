@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,10 @@ type CircularB struct {
 
 type ComponentWithProvider struct {
 	RequestBeanProvider Provider[*RequestBean] `spring:"RequestBean"`
+}
+
+type ComponentWithProviderPtr struct {
+	RequestBeanProviderPtr *Provider[*RequestBean] `spring:"RequestBean"`
 }
 
 type ComponentWithDirectInjection struct {
@@ -91,15 +96,15 @@ func TestContainer_Scopes(t *testing.T) {
 	ctx1 := context.WithValue(context.Background(), registryKey, reg1)
 
 	// Resolve in context 1
-	r1_1, err := c.GetBeanScoped(ctx1, "RequestBean")
+	r1a, err := c.GetBeanScoped(ctx1, "RequestBean")
 	if err != nil {
 		t.Fatalf("failed to resolve RequestBean in ctx1: %v", err)
 	}
-	r1_2, err := c.GetBeanScoped(ctx1, "RequestBean")
+	r1b, err := c.GetBeanScoped(ctx1, "RequestBean")
 	if err != nil {
 		t.Fatalf("failed to resolve RequestBean in ctx1: %v", err)
 	}
-	if r1_1 != r1_2 {
+	if r1a != r1b {
 		t.Errorf("expected same instance within same request context, got different pointers")
 	}
 
@@ -108,11 +113,11 @@ func TestContainer_Scopes(t *testing.T) {
 	defer c.DestroyRequestRegistry(reg2)
 	ctx2 := context.WithValue(context.Background(), registryKey, reg2)
 
-	r2_1, err := c.GetBeanScoped(ctx2, "RequestBean")
+	r2a, err := c.GetBeanScoped(ctx2, "RequestBean")
 	if err != nil {
 		t.Fatalf("failed to resolve RequestBean in ctx2: %v", err)
 	}
-	if r1_1 == r2_1 {
+	if r1a == r2a {
 		t.Errorf("expected different instances between different request contexts, got same pointer")
 	}
 }
@@ -149,9 +154,9 @@ func TestContainer_Provider(t *testing.T) {
 	req1.Value = "hello-ctx1"
 
 	// Check it was stored in ctx1 registry
-	req1_again, _ := comp.RequestBeanProvider.Get(ctx1)
-	if req1_again.Value != "hello-ctx1" {
-		t.Errorf("expected value 'hello-ctx1', got '%s'", req1_again.Value)
+	req1Again, _ := comp.RequestBeanProvider.Get(ctx1)
+	if req1Again.Value != "hello-ctx1" {
+		t.Errorf("expected value 'hello-ctx1', got '%s'", req1Again.Value)
 	}
 
 	// Context 2
@@ -165,6 +170,27 @@ func TestContainer_Provider(t *testing.T) {
 	}
 	if req2.Value == "hello-ctx1" {
 		t.Errorf("expected empty value or different instance in ctx2, got 'hello-ctx1'")
+	}
+
+	// Also test pointer provider (*Provider[T])
+	c.RegisterBeanDefinition("ComponentWithProviderPtr", func() *ComponentWithProviderPtr {
+		return &ComponentWithProviderPtr{}
+	}, WithScope(ScopeSingleton))
+
+	compPtrBean, err := c.GetBeanScoped(context.Background(), "ComponentWithProviderPtr")
+	if err != nil {
+		t.Fatalf("failed to resolve ComponentWithProviderPtr: %v", err)
+	}
+	compPtr := compPtrBean.(*ComponentWithProviderPtr)
+	if compPtr.RequestBeanProviderPtr == nil {
+		t.Fatalf("expected RequestBeanProviderPtr field to be injected, got nil")
+	}
+	reqPtr, err := compPtr.RequestBeanProviderPtr.Get(ctx1)
+	if err != nil {
+		t.Fatalf("failed to resolve RequestBean via pointer provider: %v", err)
+	}
+	if reqPtr.Value != "hello-ctx1" {
+		t.Errorf("expected value 'hello-ctx1', got '%s'", reqPtr.Value)
 	}
 }
 
@@ -254,3 +280,135 @@ func TestContainer_Concurrency(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestContainer_Clear_PreservesDefinitions(t *testing.T) {
+	c := GetContainer()
+	c.ResetAll()
+
+	callCount := 0
+	c.RegisterBeanDefinition("FactoryBean", func() *SingletonBean {
+		callCount++
+		return &SingletonBean{Value: "instance-1"}
+	}, WithScope(ScopeSingleton))
+
+	// Resolve first instance
+	b1, err := c.GetBeanScoped(context.Background(), "FactoryBean")
+	if err != nil {
+		t.Fatalf("failed to resolve FactoryBean: %v", err)
+	}
+	if callCount != 1 {
+		t.Errorf("expected factory callCount 1, got %d", callCount)
+	}
+
+	// Call Clear() - must clear instance cache and reset sync.Once but keep definition
+	c.Clear()
+
+	// Resolve again - factory should be invoked again because definition was preserved
+	b2, err := c.GetBeanScoped(context.Background(), "FactoryBean")
+	if err != nil {
+		t.Fatalf("expected FactoryBean definition to be preserved after Clear(), got error: %v", err)
+	}
+	if callCount != 2 {
+		t.Errorf("expected factory callCount 2 after Clear(), got %d", callCount)
+	}
+	if b1 == b2 {
+		t.Errorf("expected new instance pointer after Clear(), got same pointer")
+	}
+}
+
+func TestContainer_ResetAll(t *testing.T) {
+	c := GetContainer()
+	c.ResetAll()
+
+	c.RegisterBeanDefinition("TempBean", func() *SingletonBean {
+		return &SingletonBean{Value: "temp"}
+	})
+
+	_, err := c.GetBeanScoped(context.Background(), "TempBean")
+	if err != nil {
+		t.Fatalf("failed to resolve TempBean before ResetAll: %v", err)
+	}
+
+	// Call ResetAll() - must unregister definitions and factories
+	c.ResetAll()
+
+	_, err = c.GetBeanScoped(context.Background(), "TempBean")
+	if err == nil {
+		t.Fatalf("expected error resolving TempBean after ResetAll(), got nil")
+	}
+}
+
+func TestContainer_FactoryReturningError(t *testing.T) {
+	c := GetContainer()
+	c.ResetAll()
+
+	// 1. Test factory returning (T, nil) success
+	c.RegisterBeanDefinition("SuccessBean", func() (*SingletonBean, error) {
+		return &SingletonBean{Value: "factory-with-error-return"}, nil
+	})
+
+	beanVal, err := c.GetBeanScoped(context.Background(), "SuccessBean")
+	if err != nil {
+		t.Fatalf("failed to resolve SuccessBean: %v", err)
+	}
+	bean, ok := beanVal.(*SingletonBean)
+	if !ok || bean.Value != "factory-with-error-return" {
+		t.Errorf("expected value 'factory-with-error-return', got %v", beanVal)
+	}
+
+	// 2. Test factory returning (nil, error) failure
+	sentinelErr := errors.New("initialization failed due to external system failure")
+	c.RegisterBeanDefinition("FailingBean", func() (*SingletonBean, error) {
+		return nil, sentinelErr
+	})
+
+	_, err = c.GetBeanScoped(context.Background(), "FailingBean")
+	if err == nil {
+		t.Fatalf("expected error when resolving FailingBean, got nil")
+	}
+	if !errors.Is(err, sentinelErr) {
+		t.Errorf("expected error to wrap sentinelErr, got: %v", err)
+	}
+}
+
+func TestContainer_FlexibleFactoryInjection(t *testing.T) {
+	c := GetContainer()
+	c.ResetAll()
+
+	// 1. Register dependency bean
+	c.RegisterBeanDefinition("SingletonBean", func() *SingletonBean {
+		return &SingletonBean{Value: "injected-via-factory-param"}
+	})
+
+	// 2. Register target service with factory parameter demanding *SingletonBean
+	c.RegisterBeanDefinition("ServiceWithDep", func(dep *SingletonBean) (*ComponentWithDirectInjection, error) {
+		return &ComponentWithDirectInjection{Singleton: dep}, nil
+	})
+
+	// 3. Resolve target service - factory parameter should be automatically injected
+	serviceVal, err := c.GetBeanScoped(context.Background(), "ServiceWithDep")
+	if err != nil {
+		t.Fatalf("failed to resolve ServiceWithDep: %v", err)
+	}
+
+	serviceBean, ok := serviceVal.(*ComponentWithDirectInjection)
+	if !ok || serviceBean.Singleton == nil {
+		t.Fatalf("expected Singleton parameter to be injected into factory, got nil")
+	}
+
+	if serviceBean.Singleton.Value != "injected-via-factory-param" {
+		t.Errorf("expected value 'injected-via-factory-param', got '%s'", serviceBean.Singleton.Value)
+	}
+
+	// 4. Test unresolvable parameter type produces error
+	type UnregisteredType struct{}
+	c.RegisterBeanDefinition("UnresolvableBean", func(u *UnregisteredType) *SingletonBean {
+		return &SingletonBean{Value: "fail"}
+	})
+
+	_, err = c.GetBeanScoped(context.Background(), "UnresolvableBean")
+	if err == nil {
+		t.Fatalf("expected error resolving UnresolvableBean with unregistered parameter type, got nil")
+	}
+}
+
