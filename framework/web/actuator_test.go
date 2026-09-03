@@ -157,3 +157,41 @@ func TestActuator_HealthEndpointPrivacy(t *testing.T) {
 	assert.Contains(t, bodyAuth, `"status":"UP"`)
 	assert.Contains(t, bodyAuth, `"system"`)
 }
+
+func TestActuator_DashboardEndpoints(t *testing.T) {
+	props := &BasicAuthProperties{
+		Name:     "admin",
+		Password: "dashboard-pass",
+	}
+	ioc.GetContainer().RegisterBean("BasicAuthProperties", props)
+
+	r := chi.NewRouter()
+	RegisterActuatorRoutes(r)
+
+	// Test HTML dashboard
+	reqHTML := httptest.NewRequest(http.MethodGet, "/actuator/dashboard", nil)
+	reqHTML.SetBasicAuth("admin", "dashboard-pass")
+	wHTML := httptest.NewRecorder()
+	r.ServeHTTP(wHTML, reqHTML)
+	assert.Equal(t, http.StatusOK, wHTML.Code)
+	assert.Contains(t, wHTML.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, wHTML.Body.String(), "SprinGo Actuator Console")
+
+	// Test CSS asset
+	reqCSS := httptest.NewRequest(http.MethodGet, "/actuator/css/dashboard.css", nil)
+	reqCSS.SetBasicAuth("admin", "dashboard-pass")
+	wCSS := httptest.NewRecorder()
+	r.ServeHTTP(wCSS, reqCSS)
+	assert.Equal(t, http.StatusOK, wCSS.Code)
+	assert.Contains(t, wCSS.Header().Get("Content-Type"), "text/css")
+	assert.NotEmpty(t, wCSS.Body.String())
+
+	// Test JS asset
+	reqJS := httptest.NewRequest(http.MethodGet, "/actuator/js/dashboard.js", nil)
+	reqJS.SetBasicAuth("admin", "dashboard-pass")
+	wJS := httptest.NewRecorder()
+	r.ServeHTTP(wJS, reqJS)
+	assert.Equal(t, http.StatusOK, wJS.Code)
+	assert.Contains(t, wJS.Header().Get("Content-Type"), "application/javascript")
+	assert.NotEmpty(t, wJS.Body.String())
+}

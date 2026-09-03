@@ -16,13 +16,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-//go:embed dashboard.html
+//go:embed dashboard/dashboard.html
 var dashboardHTML string
 
-//go:embed dashboard.css
+//go:embed dashboard/dashboard.css
 var dashboardCSS string
 
-//go:embed dashboard.js
+//go:embed dashboard/dashboard.js
 var dashboardJS string
 
 // BasicAuthProperties defines basic security settings.
