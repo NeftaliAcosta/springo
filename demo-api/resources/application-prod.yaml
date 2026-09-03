@@ -1,3 +1,21 @@
 server:
-    port: 80
-    name: "SprinGo (Production Profile)"
+  port: ${PORT:8080}
+  name: "SprinGo (Production Profile)"
+
+management:
+  health:
+    show-system: false
+    show-components: false
+
+security:
+  jwt:
+    secret: "${JWT_SECRET}"
+    expiration: 86400
+
+spring:
+  datasource:
+    driver: "${DB_DRIVER:postgres}"
+    url: "${DATABASE_URL}"
+    auto-migrate: true
+    health-check: true
+    migration-lock-timeout: 5m

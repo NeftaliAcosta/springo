@@ -1,2 +1,10 @@
 server:
-    port: 8081
+  port: ${PORT:8080}
+  name: "SprinGo (Development Profile)"
+
+spring:
+  datasource:
+    driver: "${DB_DRIVER:sqlite}"
+    url: "${DATABASE_URL:springo_dev.db}"
+    auto-migrate: true
+    health-check: true

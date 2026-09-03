@@ -1,80 +1,70 @@
 server:
-    port: 8080
-    api:
-        base-path: "/api/v1"
-    name: "SprinGo (Default Profile)"
-    cors:
-        allowed-origins: ["http://localhost:3000", "http://localhost:4200"]
-        allowed-origin-patterns: ["https://*.youbootcamps.com"]
-        allowed-methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-        allowed-headers: ["Authorization", "Content-Type", "X-Requested-With"]
-        exposed-headers: ["Content-Disposition"]
-        allow-credentials: true
-        max-age: 3600
+  port: ${PORT:8080}
+  api:
+    base-path: "/api/v1"
+  name: "SprinGo (Default Profile)"
+  cors:
+    allowed-origins: ["http://localhost:3000", "http://localhost:4200"]
+    allowed-origin-patterns: ["https://*.youbootcamps.com"]
+    allowed-methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allowed-headers: ["Authorization", "Content-Type", "X-Requested-With"]
+    exposed-headers: ["Content-Disposition"]
+    allow-credentials: true
+    max-age: 3600
 
 management:
-    health:
-        show-system: true # Set to true to see goroutines, memory, etc.
-        show-components: true # Set to true to see database status
-        diskspace:
-            enabled: false
-            path: "."
-            threshold: "100MB"
+  health:
+    show-system: true
+    show-components: true
+    diskspace:
+      enabled: false
+      path: "."
+      threshold: "100MB"
 
 security:
-    jwt:
-        secret: "springo-ultra-secret-key-for-development"
-        expiration: 60
-        public-paths:
-            - "/api/v1/auth/login"
-            - "/api/v1/actuator/health"
-            - "/api/v1/actuator/info"
-            - "/swagger"
+  jwt:
+    secret: "${JWT_SECRET:springo-ultra-secret-key-for-development}"
+    expiration: 3600
+    public-paths:
+      - "/api/v1/auth/login"
+      - "/api/v1/actuator/health"
+      - "/api/v1/actuator/info"
+      - "/swagger"
 
 spring:
-    security:
-        user:
-            name: "admin"
-    event:
-        enabled: false
-        dlq:
-            enabled: true
-            max-retries: 5
-            retry-intervals: ["10s", "30s", "1m", "5m", "10m"]
-            store: "main-db"
+  security:
+    user:
+      name: "admin"
+  event:
+    enabled: false
+    dlq:
+      enabled: true
+      max-retries: 5
+      retry-intervals: ["10s", "30s", "1m", "5m", "10m"]
+      store: "main-db"
 
-    datasource:
-        driver: "sqlite"
-        url: "springo.db"
-        auto-migrate: true
-        health-check: true # Opt-in for this specific database health monitoring
-        # Optional: customize history table name
-        # migration-table: "springo_migrations"
+  datasource:
+    driver: "${DB_DRIVER:sqlite}"
+    url: "${DATABASE_URL:springo.db}"
+    auto-migrate: true
+    health-check: true
+    migration-table: "springo_migrations"
+    migration-lock-timeout: 5m
 
-    # Example of multi-datasource configuration (Enterprise-ready)
-    # additional-datasources:
-    #     audit:
-    #         driver: "sqlite"
-    #         url: "audit.db"
-    #         auto-migrate: true
-    #     legacy:
-    #         driver: "mysql"
-    #         url: "user:pass@tcp(old-server:3306)/legacy_db"
-
-    scheduler:
+  scheduler:
+    enabled: true
+    jobs:
+      DLQRetryJob:
+        fixed-rate: "10s"
         enabled: true
-        jobs:
-            DLQRetryJob:
-                fixed-rate: "10s"
-                enabled: true
-            AuthTokenJob:
-                cron: "0 0 */4 * * *" # Every 4 hours
-                run-on-startup: true
-                priority: 1
-                critical: true
-                enabled: true
-            CleanupOldSessionsJob:
-                fixed-rate: "10s" # For testing purposes
-                run-on-startup: true
-                priority: 2
-                enabled: true
+      AuthTokenJob:
+        cron: "0 0 */4 * * *"
+        run-on-startup: true
+        priority: 1
+        critical: true
+        enabled: true
+      CleanupOldSessionsJob:
+        fixed-rate: "10s"
+        run-on-startup: true
+        priority: 2
+        enabled: true
