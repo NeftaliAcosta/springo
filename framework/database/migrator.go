@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -129,7 +130,10 @@ func (m *MigrationManager) waitForLock(db *gorm.DB, lockedBy string) error {
 		if acquired {
 			return nil
 		}
-		log.Printf("⏳ [Migrator] Database migration lock is currently held by another instance. Retrying in %v...", pollInterval)
+		log.Printf(
+			"⏳ [Migrator] Database migration lock is currently held by another instance. Retrying in %v...",
+			pollInterval,
+		)
 		time.Sleep(pollInterval)
 	}
 	return fmt.Errorf("failed to acquire database migration lock after waiting %v", maxWait)
@@ -140,38 +144,46 @@ func (m *MigrationManager) startHeartbeat(db *gorm.DB, lockedBy string) (stop fu
 	if props := config.Get[DataSourceProperties](); props != nil && props.MigrationLockTimeout > 0 {
 		lockTimeout = props.MigrationLockTimeout
 	}
-	heartbeatInterval := lockTimeout / 3
-	if heartbeatInterval > 30*time.Second {
-		heartbeatInterval = 30 * time.Second
+
+	interval := lockTimeout / 3
+	if interval > 30*time.Second {
+		interval = 30 * time.Second
 	}
-	if heartbeatInterval < 1*time.Second {
-		heartbeatInterval = 1 * time.Second
+	if interval < 100*time.Millisecond {
+		interval = 100 * time.Millisecond
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
-	stopHeartbeat := make(chan struct{})
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(heartbeatInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
-			case <-ticker.C:
-				m.refreshLock(db, lockedBy)
-			case <-stopHeartbeat:
+			case <-ctx.Done():
 				return
+			case <-ticker.C:
+				m.updateLockHeartbeat(db, lockedBy)
 			}
 		}
 	}()
 
 	return func() {
-		close(stopHeartbeat)
+		cancel()
 		wg.Wait()
 		if err := m.releaseLock(db, lockedBy); err != nil {
 			log.Printf("⚠️ [Migrator] Failed to release database migration lock: %v", err)
 		}
 	}
+}
+
+func (m *MigrationManager) updateLockHeartbeat(db *gorm.DB, lockedBy string) {
+	db.Table("springo_migrations_lock").
+		Where("lock_key = ? AND locked_by = ?", "migration_lock", lockedBy).
+		Update("locked_at", time.Now())
 }
 
 func (m *MigrationManager) getExecutedMigrationsMap(db *gorm.DB) (map[string]MigrationRecord, error) {
@@ -194,7 +206,13 @@ func (m *MigrationManager) validateChecksums(executedMap map[string]MigrationRec
 		if record, ok := executedMap[reg.Name]; ok {
 			expectedChecksum := computeChecksum(reg)
 			if reg.Checksum != "" && record.Checksum != "" && expectedChecksum != record.Checksum {
-				return fmt.Errorf("integrity violation: migration %q has checksum %q, but database record has %q. The migration logic has been modified after execution", reg.Name, expectedChecksum, record.Checksum)
+				return fmt.Errorf(
+					"integrity violation: migration %q has checksum %q, but database record has %q. "+
+						"The migration logic has been modified after execution",
+					reg.Name,
+					expectedChecksum,
+					record.Checksum,
+				)
 			}
 		}
 	}
@@ -213,7 +231,10 @@ func (m *MigrationManager) getPendingMigrations(executedMap map[string]Migration
 
 func (m *MigrationManager) getNextBatch(db *gorm.DB) int {
 	var lastRecord MigrationRecord
-	db.Table(getCustomTableName()).Session(&gorm.Session{Logger: db.Logger.LogMode(1)}).Order("batch desc").First(&lastRecord)
+	db.Table(getCustomTableName()).
+		Session(&gorm.Session{Logger: db.Logger.LogMode(1)}).
+		Order("batch desc").
+		First(&lastRecord)
 	return lastRecord.Batch + 1
 }
 

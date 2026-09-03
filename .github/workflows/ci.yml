@@ -2,13 +2,88 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  test-matrix:
+    name: Test (Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.22', '1.23', '1.24']
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: springo
+          POSTGRES_PASSWORD: springopassword
+          POSTGRES_DB: springo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: springo_test
+          MYSQL_USER: springo
+          MYSQL_PASSWORD: springopassword
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache-dependency-path: |
+            go.sum
+            demo-api/go.sum
+
+      - name: Verify root module tidy & vet
+        run: |
+          go mod tidy -diff
+          go vet ./...
+
+      - name: Run root module tests with race detector
+        env:
+          TEST_POSTGRES_URL: "postgres://springo:springopassword@localhost:5432/springo_test?sslmode=disable"
+          TEST_MYSQL_URL: >-
+            springo:springopassword@tcp(127.0.0.1:3306)/springo_test?charset=utf8mb4&parseTime=True&loc=Local
+        run: go test -race -count=1 ./...
+
+      - name: Verify demo module tidy & vet
+        working-directory: demo-api
+        run: |
+          go mod tidy -diff
+          go vet ./...
+
+      - name: Run demo module tests with race detector
+        working-directory: demo-api
+        run: go test -race -count=1 ./...
+
+  lint-and-security:
+    name: Lint & Security Scan
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -22,25 +97,25 @@ jobs:
             go.sum
             demo-api/go.sum
 
-      - name: Verify root module
-        run: |
-          go mod tidy -diff
-          go vet ./...
-          go test -race -count=1 ./...
+      - name: Run golangci-lint (root)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.6
+          args: --timeout=5m
 
-      - name: Verify demo module
-        working-directory: demo-api
-        run: |
-          go mod tidy -diff
-          go vet ./...
-          go test -race -count=1 ./...
+      - name: Run golangci-lint (demo-api)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.6
+          working-directory: demo-api
+          args: --timeout=5m
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      - name: Scan root module
+      - name: Security scan root module
         run: govulncheck ./...
 
-      - name: Scan demo module
+      - name: Security scan demo module
         working-directory: demo-api
         run: govulncheck ./...

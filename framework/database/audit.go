@@ -33,23 +33,32 @@ func EnableAuditing(db *gorm.DB, models ...interface{}) error {
 	return nil
 }
 
+// RegisterGormCallbacks registers audit hooks for create, update, and delete on the given DB handle.
 func registerGormCallbacks(db *gorm.DB) error {
-	var initErr error
-	registerAuditOnce.Do(func() {
-		if err := db.Callback().Create().After("gorm:create").Register("springo:audit_create", auditCreateCallback); err != nil {
-			initErr = fmt.Errorf("failed to register audit create callback: %w", err)
-			return
-		}
-		if err := db.Callback().Update().After("gorm:update").Register("springo:audit_update", auditUpdateCallback); err != nil {
-			initErr = fmt.Errorf("failed to register audit update callback: %w", err)
-			return
-		}
-		if err := db.Callback().Delete().After("gorm:delete").Register("springo:audit_delete", auditDeleteCallback); err != nil {
-			initErr = fmt.Errorf("failed to register audit delete callback: %w", err)
-			return
-		}
-	})
-	return initErr
+	cb := db.Callback()
+
+	err := cb.Create().
+		After("gorm:create").
+		Register("springo:audit_create", auditCreateCallback)
+	if err != nil {
+		return fmt.Errorf("failed to register audit create callback: %w", err)
+	}
+
+	err = cb.Update().
+		After("gorm:update").
+		Register("springo:audit_update", auditUpdateCallback)
+	if err != nil {
+		return fmt.Errorf("failed to register audit update callback: %w", err)
+	}
+
+	err = cb.Delete().
+		After("gorm:delete").
+		Register("springo:audit_delete", auditDeleteCallback)
+	if err != nil {
+		return fmt.Errorf("failed to register audit delete callback: %w", err)
+	}
+
+	return nil
 }
 
 func setupModelAuditing(db *gorm.DB, model interface{}) error {
@@ -487,7 +496,13 @@ func resolveDefaultUser(ctx context.Context) string {
 }
 
 // WriteAuditRecord persists an audit entry into the target entity's _aud table.
-func writeAuditRecord(db *gorm.DB, tableName string, record map[string]interface{}, action string, userKey string) error {
+func writeAuditRecord(
+	db *gorm.DB,
+	tableName string,
+	record map[string]interface{},
+	action string,
+	userKey string,
+) error {
 	auditTableName := tableName + "_aud"
 
 	username, err := resolveRevUser(db.Statement.Context, tableName, userKey)
