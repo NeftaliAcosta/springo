@@ -10,7 +10,7 @@ Install or update the `springo` binary directly using the Go toolchain:
 
 ```bash
 # Install specific Release Candidate or stable release
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc18
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc19
 
 # Verify installation
 springo version

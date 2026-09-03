@@ -3,7 +3,7 @@ module {{.ModuleName}}
 go 1.25.0
 
 require (
-	github.com/NeftaliAcosta/springo v1.0.0-rc18
+	github.com/NeftaliAcosta/springo v1.0.0-rc19
 )
 
 {{if .IsLocal}}replace github.com/NeftaliAcosta/springo => {{.LocalFrameworkPath}}{{end}}
