@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://neftaliacosta.github.io/springo/sitemap.xml
