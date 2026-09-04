@@ -1,7 +1,7 @@
 # ⚙️ Step-by-Step Guide: Configuration Properties & Profiles
 
-This tutorial explains how to manage application properties, multi-environment profiles, and custom configuration
-structs in SprinGo.
+This tutorial explains how to manage application properties, multi-environment profiles, direct property reads,
+and conditional configuration in SprinGo.
 
 ---
 
@@ -10,7 +10,11 @@ structs in SprinGo.
 SprinGo provides a Spring Boot-like configuration engine:
 - **Zero-Boilerplate Binding**: Type-safe mapping from YAML files into Go structs via `config.RegisterProperties`
   and `config.Get[T]()`.
-- **Environment Profiles**: Seamless switching with `SPRINGO_PROFILES_ACTIVE` (e.g. `local`, `dev`, `staging`, `prod`).
+- **Direct Property Lookups (@Value style)**: Lightweight accessors `GetString`, `GetInt`, `GetBool`, `GetDuration`,
+  and `GetValue[T]` for reading single values without defining structs.
+- **Conditional Configuration (@ConditionalOnProperty)**: Declarative callbacks `When`, `WhenProfile`, and
+  `RegisterConditionalBean` executed during application startup.
+- **Environment Profiles**: Seamless switching with `SPRINGO_PROFILES_ACTIVE` (e.g. `local`, `dev`, `prod`).
 - **Dynamic Env Placeholders**: Supports Spring-style default fallbacks like `${DATABASE_URL:sqlite://data.db}`.
 - **Fail-Fast Validation**: Automatic struct validation on application startup before servers open listeners.
 
@@ -49,7 +53,7 @@ func init() {
 
 ---
 
-## 3. Reading Configuration at Runtime
+## 3. Reading Configuration at Runtime (Typed Struct)
 
 Retrieve the strongly typed configuration struct anywhere in your codebase using `config.Get[T]()`:
 
@@ -99,7 +103,70 @@ func InitSentry() error {
 
 ---
 
-## 4. Multi-Environment YAML Profiles
+## 4. Direct Property Reading (@Value Helpers)
+
+For isolated property lookups without declaring custom structs, use `@Value` style helpers:
+
+```go
+package service
+
+import (
+    "time"
+
+    "github.com/NeftaliAcosta/springo/framework/config"
+)
+
+func ProcessOrder() {
+    // Read string, boolean, integer, or duration with safe fallback defaults
+    apiKey := config.GetString("payment.stripe.api-key", "default-test-key")
+    isSandbox := config.GetBool("payment.stripe.sandbox", true)
+    maxRetries := config.GetInt("payment.stripe.max-retries", 3)
+    timeout := config.GetDuration("payment.stripe.timeout", 5*time.Second)
+
+    // Read typed complex data structures
+    type WebhookConfig struct {
+        URL    string `yaml:"url"`
+        Secret string `yaml:"secret"`
+    }
+    wh := config.GetValue[WebhookConfig]("payment.stripe.webhook", WebhookConfig{})
+}
+```
+
+---
+
+## 5. Declarative Conditional Configuration (@ConditionalOnProperty)
+
+SprinGo allows registering initializers, callbacks, and beans conditionally during startup:
+
+```go
+package config
+
+import (
+    "github.com/NeftaliAcosta/springo/framework/config"
+    "github.com/NeftaliAcosta/springo/framework/ioc"
+)
+
+func init() {
+    // 1. Execute logic only when a property evaluates to expected value
+    config.When("encryption.aes.enabled", true, func() {
+        // Register encryption middleware or custom interceptors
+    })
+
+    // 2. Execute logic only for specific active profiles
+    config.WhenProfile([]string{"prod", "staging"}, func() {
+        // Register strict security checkers
+    })
+
+    // 3. Register beans conditionally in the IoC container
+    config.RegisterConditionalBean("notificationService", "notifications.enabled", true, func() any {
+        return &EmailNotificationService{}
+    })
+}
+```
+
+---
+
+## 6. Multi-Environment YAML Profiles
 
 Place configuration files in `resources/`:
 ```text
@@ -151,7 +218,7 @@ management:
 
 ---
 
-## 5. Activating Profiles
+## 7. Activating Profiles
 
 Activate profiles using standard environment variables:
 

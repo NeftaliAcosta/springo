@@ -87,7 +87,7 @@
                     keyframes: {
                 'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (24)',
                 'doc.ioc.title': 'Contenedor IoC y Fábricas de Constructores',
-                'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct y resolución perezosa Provider[T].',
+                'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct, registro condicional (@ConditionalOnProperty) y helpers @Value.',
                 'doc.multidb.title': 'Multi-DataSource y Réplicas de Lectura',
                 'doc.multidb.desc': 'Configuración nativa de base de datos primaria y secundarias nombradas, réplicas read-only o almacenes de datos analíticos con dimensionamiento de pool.',
                 'doc.val.title': 'Grupos de Validación y Tags Personalizados',
@@ -1184,7 +1184,7 @@
             <div class="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto reveal pb-12">
                 <div class="glass rounded-2xl p-5">
                     <div class="stat-num">24+</div>
-                    <div class="text-slate-400 text-sm mt-1" data-i18n="hero.stat1">Core Modules & Guides</div>
+                    <div class="text-slate-400 text-sm mt-1" data-i18n="hero.stat1">Guides &amp; Tutorials</div>
                 </div>
                 <div class="glass rounded-2xl p-5">
                     <div class="stat-num">v1.0 RC</div>
@@ -1211,7 +1211,7 @@
                     <span data-i18n="features.h2a">Everything you need,</span> <span class="gradient-text"
                         data-i18n="features.h2b">nothing you don't</span>
                 </h2>
-                <p class="text-slate-400 text-lg max-w-2xl mx-auto" data-i18n="features.sub">SprinGo packs 13+
+                <p class="text-slate-400 text-lg max-w-2xl mx-auto" data-i18n="features.sub">SprinGo packs 14+
                     enterprise modules into a clean Kernel architecture so you ship faster without sacrificing quality.
                 </p>
             </div>
@@ -2246,18 +2246,28 @@
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div>
                             <h3 class="text-white font-bold text-xl mb-4" data-i18n="doc.ioc.title">IoC Container &amp; Constructor Factories</h3>
-                            <p class="text-slate-400 text-sm leading-relaxed mb-4" data-i18n="doc.ioc.desc">Thread-safe Inversion of Control container with support for (T, error) constructor factories, tag-based field autowiring, and type-safe Provider[T] lazy resolution.</p>
+                            <p class="text-slate-400 text-sm leading-relaxed mb-4" data-i18n="doc.ioc.desc">Thread-safe Inversion of Control container with support for (T, error) constructor factories, tag-based field autowiring, conditional bean registration (@ConditionalOnProperty), and @Value helpers.</p>
                             <div class="space-y-3 mb-5 text-sm">
                                 <div class="flex items-start gap-3"><span class="text-brand-400 mt-0.5">→</span><span class="text-slate-300"><strong class="text-white">(T, error) Factories</strong>: Safe error wrapping and propagation on startup</span></div>
                                 <div class="flex items-start gap-3"><span class="text-brand-400 mt-0.5">→</span><span class="text-slate-300"><strong class="text-white">Field Autowiring</strong>: Inject beans via struct tags <code class="text-brand-400 bg-brand-400/10 px-1 rounded text-xs">spring:"beanName"</code></span></div>
                                 <div class="flex items-start gap-3"><span class="text-brand-400 mt-0.5">→</span><span class="text-slate-300"><strong class="text-white">Lazy Resolution</strong>: Inject <code class="text-brand-400 bg-brand-400/10 px-1 rounded text-xs">ioc.Provider[T]</code> for deferred on-demand initialization</span></div>
+                                <div class="flex items-start gap-3"><span class="text-brand-400 mt-0.5">→</span><span class="text-slate-300"><strong class="text-white">Conditional Config</strong>: <code class="text-brand-400 bg-brand-400/10 px-1 rounded text-xs">config.When / WhenProfile</code> (@ConditionalOnProperty)</span></div>
+                                <div class="flex items-start gap-3"><span class="text-brand-400 mt-0.5">→</span><span class="text-slate-300"><strong class="text-white">@Value Helpers</strong>: Lightweight property accessors <code class="text-brand-400 bg-brand-400/10 px-1 rounded text-xs">config.GetString / GetValue[T]</code></span></div>
                             </div>
                         </div>
                         <div class="glass rounded-xl overflow-hidden">
                             <div class="code-header"><span class="code-dot bg-red-400"></span><span class="code-dot bg-yellow-400"></span><span class="code-dot bg-green-400"></span><span class="text-slate-500 text-xs ml-2 font-mono">IoC Bean Registration &amp; Injection</span></div>
                             <div class="p-4 text-xs font-mono relative">
                                 <button class="copy-btn" onclick="copyCode(this)">copy</button>
-                                <pre><span class="tk-comment">// Register factory returning (T, error)</span>
+                                <pre><span class="tk-comment">// Conditional registration (@ConditionalOnProperty)</span>
+<span class="tk-pkg">config</span>.<span class="tk-func">When</span>(<span class="tk-string">"observability.sentry.enabled"</span>, <span class="tk-string">"true"</span>, <span class="tk-keyword">func</span>() {
+    <span class="tk-pkg">ioc</span>.<span class="tk-func">RegisterBean</span>(<span class="tk-string">"sentryClient"</span>, <span class="tk-pkg">sentry</span>.<span class="tk-func">NewClient</span>())
+})
+
+<span class="tk-comment">// Direct property lookup (@Value helper)</span>
+<span class="tk-var">dsn</span> := <span class="tk-pkg">config</span>.<span class="tk-func">GetString</span>(<span class="tk-string">"observability.sentry.dsn"</span>, <span class="tk-string">"https://default@sentry.io/1"</span>)
+
+<span class="tk-comment">// Register factory returning (T, error)</span>
 <span class="tk-pkg">ioc</span>.<span class="tk-func">RegisterFactory</span>(<span class="tk-string">"orderService"</span>, <span class="tk-keyword">func</span>(<span class="tk-var">repo</span> *<span class="tk-type">OrderRepo</span>) (*<span class="tk-type">OrderService</span>, <span class="tk-type">error</span>) {
     <span class="tk-keyword">return</span> &amp;<span class="tk-type">OrderService</span>{Repo: repo}, <span class="tk-keyword">nil</span>
 })
@@ -2995,7 +3005,7 @@
             en: {
                 'tab.ioc': 'IoC & DI', 'tab.multidb': 'Multi-DataSource', 'tab.validation': 'Validation', 'tab.scheduler': 'Scheduler', 'tab.cache': 'Redis Cache', 'tab.tutorials': 'Tutorials (24)',
                 'doc.ioc.title': 'IoC Container & Constructor Factories',
-                'doc.ioc.desc': 'Thread-safe Inversion of Control container with support for (T, error) constructor factories, tag-based field autowiring, and type-safe Provider[T] lazy resolution.',
+                'doc.ioc.desc': 'Thread-safe Inversion of Control container with support for (T, error) constructor factories, tag-based field autowiring, conditional bean registration (@ConditionalOnProperty), and @Value helpers.',
                 'doc.multidb.title': 'Multi-DataSource & Read Replicas',
                 'doc.multidb.desc': 'Natively configure primary read/write databases alongside named secondary connections, read-only replicas, or analytics warehouses with automatic connection pool tuning.',
                 'doc.val.title': 'Validation Groups & Custom Validators',
@@ -3010,8 +3020,8 @@
                 'hero.badge': 'v1.0.0-rc19 — Release Candidate', 'hero.h1a': 'Enterprise Go', 'hero.h1b': 'The Spring Way',
                 'hero.sub': 'SprinGo brings the power of', 'hero.sub2': ' to Go. DI, JWT, Migrations, Event Bus, Scheduler & more — one framework, infinite speed.',
                 'hero.cta1': 'Launch SprinGo', 'hero.cta2': 'Documentation',
-                'hero.stat1': 'Core Modules', 'hero.stat2': 'Kernel Arch', 'hero.stat3': 'Go Speed', 'hero.stat4': 'Config Hell', 'hero.scroll': 'orbit down',
-                'features.badge': 'Core Features', 'features.h2a': 'Everything you need,', 'features.h2b': "nothing you don't", 'features.sub': 'SprinGo packs 13+ enterprise modules into a clean Kernel architecture so you ship faster without sacrificing quality.',
+                'hero.stat1': 'Guides & Tutorials', 'hero.stat2': 'Kernel Arch', 'hero.stat3': 'Go Speed', 'hero.stat4': 'Config Hell', 'hero.scroll': 'orbit down',
+                'features.badge': 'Core Features', 'features.h2a': 'Everything you need,', 'features.h2b': "nothing you don't", 'features.sub': 'SprinGo packs 14+ enterprise modules into a clean Kernel architecture so you ship faster without sacrificing quality.',
                 'f1.title': 'One-Line Bootstrap', 'f1.desc': 'Start your entire engine — Config, IoC, Router, Middleware, Swagger — with a single call.',
                 'f2.title': 'JWT Security (Kernel)', 'f2.desc': 'HS256 & RS256 support. JWKS dynamic key fetching for Keycloak/Auth0. Boundary-safe path whitelisting.',
                 'f3.title': 'IoC & Auto-Wiring', 'f3.desc': 'Full dependency injection container. Components self-register via init() hooks. No reflection, no magic strings.',
@@ -3102,7 +3112,7 @@
             es: {
                 'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (24)',
                 'doc.ioc.title': 'Contenedor IoC y Fábricas de Constructores',
-                'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct y resolución perezosa Provider[T].',
+                'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct, registro condicional (@ConditionalOnProperty) y helpers @Value.',
                 'doc.multidb.title': 'Multi-DataSource y Réplicas de Lectura',
                 'doc.multidb.desc': 'Configuración nativa de base de datos primaria y secundarias nombradas, réplicas read-only o almacenes de datos analíticos con dimensionamiento de pool.',
                 'doc.val.title': 'Grupos de Validación y Tags Personalizados',
@@ -3117,8 +3127,8 @@
                 'hero.badge': 'v1.0.0-rc19 — Versión candidata', 'hero.h1a': 'Go Empresarial', 'hero.h1b': 'Al Estilo Spring',
                 'hero.sub': 'SprinGo trae el poder de', 'hero.sub2': ' a Go. DI, JWT, Migraciones, Event Bus, Scheduler y más — un framework, velocidad infinita.',
                 'hero.cta1': 'Lanzar SprinGo', 'hero.cta2': 'Documentación',
-                'hero.stat1': 'Módulos Core', 'hero.stat2': 'Arquitectura Kernel', 'hero.stat3': 'Velocidad Go', 'hero.stat4': 'Cero Config', 'hero.scroll': 'orbitar',
-                'features.badge': 'Características Core', 'features.h2a': 'Todo lo que necesitas,', 'features.h2b': 'nada más', 'features.sub': 'SprinGo empaca más de 13 módulos empresariales en una arquitectura Kernel limpia para que entregues más rápido sin sacrificar calidad.',
+                'hero.stat1': 'Guías y Tutoriales', 'hero.stat2': 'Arquitectura Kernel', 'hero.stat3': 'Velocidad Go', 'hero.stat4': 'Cero Config', 'hero.scroll': 'orbitar',
+                'features.badge': 'Características Core', 'features.h2a': 'Todo lo que necesitas,', 'features.h2b': 'nada más', 'features.sub': 'SprinGo empaca más de 14 módulos empresariales en una arquitectura Kernel limpia para que entregues más rápido sin sacrificar calidad.',
                 'f1.title': 'Bootstrap en Una Línea', 'f1.desc': 'Inicia tu motor completo — Config, IoC, Router, Middleware, Swagger — con una sola llamada.',
                 'f2.title': 'Seguridad JWT (Kernel)', 'f2.desc': 'Soporte HS256 y RS256. Obtención dinámica de claves JWKS para Keycloak/Auth0. Whitelisting de rutas seguro.',
                 'f3.title': 'IoC & Auto-Wiring', 'f3.desc': 'Contenedor completo de inyección de dependencias. Los componentes se auto-registran con hooks init(). Sin reflexión.',

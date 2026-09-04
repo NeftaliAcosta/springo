@@ -63,7 +63,7 @@ Your API is now live at `http://localhost:8080` with Actuator Dashboard at `http
 | 🔒 **Security** | **Enterprise JWT & CSRF** | Support for HS256, RS256 (Keycloak/Auth0 JWKS), OWASP Security Headers & CSRF. |
 | ⚡ **Database** | **GORM & ShedLock** | Declarative transactions with `REQUIRED` propagation and cluster-wide cron locking. |
 | 📡 **Messaging** | **Event Bus & Outbox/DLQ** | Domain Pub/Sub with Outbox buffer, automatic retries, and Dead Letter Queue management. |
-| ⚙️ **Config** | **Profiles & Validation** | Fail-fast property validation with `application-{profile}.yaml` environments. |
+| ⚙️ **Config** | **Profiles, @Value & Conditionals** | Fail-fast YAML binding, `@ConditionalOnProperty` execution, and `@Value` typed helpers. |
 
 ---
 
@@ -282,6 +282,39 @@ SPRINGO_PROFILES_ACTIVE=dev go run cmd/app/main.go
 
 # Production profile (loads resources/application-prod.yaml)
 SPRINGO_PROFILES_ACTIVE=prod ./main
+```
+
+### Conditional Configuration (`@ConditionalOnProperty`)
+
+Register beans, middleware, or integrations only when specific properties or profiles match:
+
+```go
+func init() {
+    // Register bean only when observability.sentry.enabled is "true"
+    config.When("observability.sentry.enabled", "true", func() {
+        ioc.RegisterBean("sentryClient", sentry.NewClient())
+    })
+
+    // Register provider only in production or staging profiles
+    config.WhenProfile([]string{"prod", "staging"}, func() {
+        ioc.RegisterBean("cloudStorage", storage.NewS3Adapter())
+    })
+}
+```
+
+### Lightweight Value Accessors (`@Value` Helpers)
+
+Read individual configuration properties directly without declaring boilerplate struct mappings:
+
+```go
+// Direct property resolution with default fallbacks and dot-path traversal
+dsn := config.GetString("observability.sentry.dsn", "https://default@sentry.io/1")
+timeout := config.GetDuration("http.client.timeout", 5*time.Second)
+maxRetries := config.GetInt("queue.retries", 3)
+debugMode := config.GetBool("app.debug", false)
+
+// Type-safe generic lookup
+rateLimit, err := config.GetValue[float64]("api.rate-limit")
 ```
 
 ---

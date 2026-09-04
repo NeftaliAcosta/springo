@@ -75,6 +75,23 @@ func init() {
 }
 ```
 
+### 2.4 Conditional Bean Registration (@ConditionalOnProperty)
+**Suggested File Path**: `internal/infrastructure/config/notification_service_config.go`
+```go
+package config
+
+import (
+    "github.com/NeftaliAcosta/springo/framework/config"
+)
+
+func init() {
+    // Only registers when 'features.notifications.enabled' is true in YAML/env
+    config.RegisterConditionalBean("notificationService", "features.notifications.enabled", true, func() any {
+        return &EmailNotificationService{}
+    })
+}
+```
+
 ---
 
 ## 3. Injecting Dependencies

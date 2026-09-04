@@ -72,7 +72,7 @@ func BootstrapE(opts ...Options) (*Application, error) {
 	// Parse options
 	opt := parseOptions(opts)
 
-	// 1. Show Identity
+	// 1. Show Identity Banner
 	showBanner(opt.DisableBanner)
 
 	// 2. Load Configuration Engine
@@ -86,33 +86,36 @@ func BootstrapE(opts ...Options) (*Application, error) {
 		return nil, fmt.Errorf("failed to initialize properties: %w", err)
 	}
 
-	// 3.1 Initialize Structured Logging
+	// 4. Evaluate Conditional Registrations (@ConditionalOnProperty / When)
+	config.ExecuteConditionals(loader)
+
+	// 5. Initialize Structured Logging
 	logging.Initialize(config.Get[logging.LoggingProperties]())
 
-	// 3.2 Initialize i18n MessageSource
+	// 6. Initialize i18n MessageSource
 	initI18n(opt.ConfigDir)
 
-	// 3.5 Initialize Health Actuator (Opt-in setup)
+	// 7. Initialize Health Actuator (Opt-in setup)
 	web.InitializeHealthIndicators()
 
-	// 3.6 Initialize Telemetry Exporter (W3C / Zipkin)
+	// 8. Initialize Telemetry Exporter (W3C / Zipkin)
 	initTelemetry(&cleanups)
 
-	// 4. Automated Database Connection & Migrations
+	// 9. Automated Database Connection & Migrations
 	dbConn, err := initDatabase(opt.DebugLogs, opt.ConfigDir, &cleanups)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Connect Additional DataSources
+	// 10. Connect Additional DataSources
 	if err := initAdditionalDataSources(opt.DebugLogs, &cleanups); err != nil {
 		return nil, err
 	}
 
-	// 6. Initialize IoC Container (for Services/Repositories)
+	// 11. Initialize IoC Container (for Services/Repositories)
 	ioc.GetContainer().InitializeAllBeans(dbConn)
 
-	// 6.25 Execute fail-fast application initializers.
+	// 12. Execute fail-fast application initializers
 	cleanups = append(cleanups, func() {
 		_ = lifecycle.RunShutdown(context.Background())
 	})
@@ -120,13 +123,12 @@ func BootstrapE(opts ...Options) (*Application, error) {
 		return nil, fmt.Errorf("application initialization failed: %w", err)
 	}
 
-	// 6.5 Run Critical Startup Jobs
+	// 13. Run Critical Startup Jobs
 	if err := scheduler.RunStartupTasksE(); err != nil {
 		return nil, fmt.Errorf("failed to run startup tasks: %w", err)
 	}
 
-	// 7. Create Router with Standard + Custom Middlewares
-	// 8. Register Infrastructure Routes
+	// 14. Create Router with Standard + Custom Middlewares & Infrastructure Routes
 	r := setupRouter(opt.Middlewares)
 
 	success = true
@@ -463,24 +465,24 @@ func (a *Application) doShutdown(ctx context.Context) error {
 	log.Println("📦 Stopping event bus worker pool...")
 	event.StopWorkerPool()
 
-	// 3.5 Execute application shutdown hooks in reverse order.
+	// 4. Execute application shutdown hooks in reverse order
 	if err := lifecycle.RunShutdown(ctx); err != nil {
 		errs = append(errs, err)
 	}
 
-	// 4. Close telemetry
+	// 5. Close telemetry
 	log.Println("📊 Closing telemetry...")
 	web.CloseTelemetry()
 
-	// 5. Close additional datasources and io.Closer beans
+	// 6. Close additional datasources and io.Closer beans
 	errs = append(errs, a.closeAdditionalBeans()...)
 
-	// 6. Close primary database connection
+	// 7. Close primary database connection
 	if err := a.closePrimaryDB(); err != nil {
 		errs = append(errs, err)
 	}
 
-	// 7. Clear IoC Container global instances
+	// 8. Clear IoC Container global instances
 	log.Println("🧹 Clearing IoC container...")
 	ioc.GetContainer().Clear()
 

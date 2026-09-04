@@ -44,10 +44,10 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 		hook(r)
 	}
 
-	// 3.5 Register Actuator Core routes
+	// 4. Register Actuator Core routes
 	RegisterActuatorRoutes(r)
 
-	// 4. Register all auto-discovered routes
+	// 5. Register all auto-discovered routes
 	RegisterAllRoutes(r)
 
 	return r
@@ -79,35 +79,56 @@ type APIProperties struct {
 	BasePath string `yaml:"base-path"`
 }
 
-// Validate normalizes and validates the application route prefix.
+// Validate normalizes and validates the web server properties.
 func (p *WebServerProperties) Validate() error {
-	basePath := strings.TrimSpace(p.API.BasePath)
-	if basePath == "" {
-		basePath = DefaultAPIBasePath
+	if err := p.API.Validate(); err != nil {
+		return err
 	}
-	if !strings.HasPrefix(basePath, "/") {
+	return p.Multipart.Validate()
+}
+
+// Validate normalizes and validates the API base path.
+func (p *APIProperties) Validate() error {
+	base := strings.TrimSpace(p.BasePath)
+	if base == "" {
+		base = DefaultAPIBasePath
+	}
+	if !strings.HasPrefix(base, "/") {
 		return fmt.Errorf("server.api.base-path must start with '/'")
 	}
-	if strings.ContainsAny(basePath, "?#") {
+	if strings.ContainsAny(base, "?#") {
 		return fmt.Errorf("server.api.base-path cannot contain query or fragment characters")
 	}
-	p.API.BasePath = path.Clean(basePath)
-	if !p.Multipart.Enabled && p.Multipart.MaxFileSize == 0 && p.Multipart.MaxRequestSize == 0 && p.Multipart.MemoryThreshold == 0 {
+
+	p.BasePath = path.Clean(base)
+	return nil
+}
+
+// Validate verifies multipart upload constraints when enabled.
+func (p *MultipartProperties) Validate() error {
+	if !p.Enabled && p.isZeroConfig() {
 		return nil
 	}
-	if p.Multipart.MaxFileSize <= 0 {
+
+	if p.MaxFileSize <= 0 {
 		return fmt.Errorf("server.multipart.max-file-size must be greater than zero")
 	}
-	if p.Multipart.MaxRequestSize <= 0 {
+	if p.MaxRequestSize <= 0 {
 		return fmt.Errorf("server.multipart.max-request-size must be greater than zero")
 	}
-	if p.Multipart.MaxFileSize > p.Multipart.MaxRequestSize {
+	if p.MaxFileSize > p.MaxRequestSize {
 		return fmt.Errorf("server.multipart.max-file-size cannot exceed max-request-size")
 	}
-	if p.Multipart.MemoryThreshold <= 0 || p.Multipart.MemoryThreshold > p.Multipart.MaxRequestSize {
-		return fmt.Errorf("server.multipart.memory-threshold must be greater than zero and cannot exceed max-request-size")
+	if p.MemoryThreshold <= 0 || p.MemoryThreshold > p.MaxRequestSize {
+		return fmt.Errorf(
+			"server.multipart.memory-threshold must be greater than zero and cannot exceed max-request-size",
+		)
 	}
 	return nil
+}
+
+func (p *MultipartProperties) isZeroConfig() bool {
+	return p.MaxFileSize == 0 && p.MaxRequestSize == 0 && p.MemoryThreshold == 0
 }
 
 func init() {

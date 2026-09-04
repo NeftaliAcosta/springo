@@ -128,10 +128,28 @@ type Validatable interface {
 	Validate() error
 }
 
-// InitializeProperties fills all registered properties from the loader, validates them, and registers them in IoC
+// InitializeProperties fills all registered properties from the loader, validates them, and registers them in IoC.
 func InitializeProperties(loader *ConfigLoader) error {
 	configMu.Lock()
 	defer configMu.Unlock()
+
+	if loader != nil {
+		SetActiveLoader(loader)
+	}
+
+	captureDefaults()
+
+	// Binding mutates registered targets. Keep it in the same critical section
+	// as ResetProperties so initialization and reset cannot race on those objects.
+	for _, reg := range registry {
+		if err := bindAndRegisterTarget(reg, loader); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func captureDefaults() {
 	defaultsOnce.Do(func() {
 		defaultsMap = make(map[interface{}]reflect.Value)
 		for _, reg := range registry {
@@ -139,28 +157,28 @@ func InitializeProperties(loader *ConfigLoader) error {
 			defaultsMap[reg.target] = deepClone(orig)
 		}
 	})
+}
 
-	// Binding mutates registered targets. Keep it in the same critical section
-	// as ResetProperties so initialization and reset cannot race on those
-	// objects.
-	for _, reg := range registry {
-		if err := loader.BindPrefix(reg.prefix, reg.target); err != nil {
+func bindAndRegisterTarget(reg PropertyRegistry, loader *ConfigLoader) error {
+	if err := loader.BindPrefix(reg.prefix, reg.target); err != nil {
+		return err
+	}
+
+	if v, ok := reg.target.(Validatable); ok {
+		if err := v.Validate(); err != nil {
 			return err
 		}
-		// Validate properties if they implement Validatable interface
-		if v, ok := reg.target.(Validatable); ok {
-			if err := v.Validate(); err != nil {
-				return err
-			}
-		}
-		// Register the filled struct as a Bean in IoC container
-		// We use the pointer type name as the bean name
-		t := reflect.TypeOf(reg.target).Elem()
-		fullName := t.PkgPath() + "." + t.Name()
-		ioc.GetContainer().RegisterBean(fullName, reg.target)
-		ioc.GetContainer().RegisterBean(t.Name(), reg.target)
 	}
+
+	registerPropertyBean(reg.target)
 	return nil
+}
+
+func registerPropertyBean(target interface{}) {
+	t := reflect.TypeOf(target).Elem()
+	fullName := t.PkgPath() + "." + t.Name()
+	ioc.GetContainer().RegisterBean(fullName, target)
+	ioc.GetContainer().RegisterBean(t.Name(), target)
 }
 
 // Get retrieves a registered property bean from the IoC container
