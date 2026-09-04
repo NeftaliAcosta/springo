@@ -1,12 +1,14 @@
 package web
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/NeftaliAcosta/springo/framework/security"
 )
 
 // TestIsPublicPath verifies the correctness and safety of path matching rules.
-// It ensures that exact path matching and directory/subpath boundaries are respected,
-// preventing security bypasses where a sibling endpoint shares the same prefix.
 func TestIsPublicPath(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -51,7 +53,7 @@ func TestIsPublicPath(t *testing.T) {
 			expected:    true,
 		},
 		{
-			name:        "No Match Sibling Path Prefix (Security Bypass Mitigation)",
+			name:        "No Match Sibling Path Prefix",
 			currentPath: "/api/v1/auth/login-admin",
 			publicPaths: []string{"/api/v1/auth/login"},
 			expected:    false,
@@ -92,7 +94,7 @@ func TestIsPublicPath(t *testing.T) {
 	}
 }
 
-
+// TestIsActuatorPath verifies actuator path matching.
 func TestIsActuatorPath(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -116,5 +118,72 @@ func TestIsActuatorPath(t *testing.T) {
 				t.Errorf("isActuatorPath(%q) = %v; want %v", tt.path, actual, tt.expected)
 			}
 		})
+	}
+}
+
+func TestAuthMiddlewareValidTokenPasses(t *testing.T) {
+	secret := "default-secret"
+	provider := security.NewJwtProvider(secret, 15)
+
+	tokenStr, err := provider.GenerateTokenWithClaims("uuid-123", []string{"USER"}, map[string]interface{}{
+		"preferred_username": "john_doe",
+		"iss":                "https://auth.company.com/realms/main",
+		"aud":                "billing-service",
+	})
+	if err != nil {
+		t.Fatalf("failed to generate token: %v", err)
+	}
+
+	req, _ := http.NewRequest("GET", "/api/orders", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	rec := httptest.NewRecorder()
+
+	var extractedUser string
+	var extractedRoles []string
+
+	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		extractedUser = security.GetUser(r.Context())
+		extractedRoles = security.GetRoles(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+	if extractedUser != "john_doe" && extractedUser != "uuid-123" {
+		t.Fatalf("unexpected principal %q", extractedUser)
+	}
+	if len(extractedRoles) == 0 {
+		t.Fatalf("expected roles in context")
+	}
+}
+
+func TestAuthMiddlewareMissingTokenReturns401(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/api/protected", nil)
+	rec := httptest.NewRecorder()
+
+	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for missing token, got %d", rec.Code)
+	}
+}
+
+func TestAuthMiddlewarePublicPathWildcardBypassesAuth(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/swagger/index.html", nil)
+	rec := httptest.NewRecorder()
+
+	handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for public swagger path, got %d", rec.Code)
 	}
 }
