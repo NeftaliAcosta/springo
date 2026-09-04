@@ -1,7 +1,7 @@
 # 🗄️ Step-by-Step Guide: Multiple DataSources & Connection Pooling
 
 This tutorial explains how to configure primary, secondary, and read-replica database connections with custom pool
-tuning in SprinGo.
+tuning and session initialization in SprinGo.
 
 ---
 
@@ -14,7 +14,10 @@ SprinGo natively supports multi-database topologies:
   analytics warehouses, or multi-tenant databases.
 - **Automated Health Monitoring (`health-check: true`)**: Automatically discovers and monitors connection liveness in
   the Actuator dashboard.
-- **Smart Connection Pool Tuning**: Dialect-aware defaults for max open connections, idle connections, and lifetime.
+- **Configurable Connection Pool Tuning**: Granular control over maximum open/idle connections, connection lifetime,
+  and idle timeouts with dialect-aware defaults.
+- **Session Initialization (`session.init-sql`)**: Execute dialect-specific setup commands (e.g. setting timezones)
+  upon opening connections.
 
 ---
 
@@ -25,26 +28,41 @@ SprinGo natively supports multi-database topologies:
 spring:
   # Primary Database (Read/Write)
   datasource:
-    driver: mysql
-    url: "${DB_DSN:root:secret@tcp(127.0.0.1:3306)/main_db?charset=utf8mb4&parseTime=True&loc=Local}"
+    driver: postgres
+    url: "${DATABASE_URL:postgres://postgres:secret@127.0.0.1:5432/app_db?sslmode=disable}"
     auto-migrate: true
     health-check: true
     migration-table: springo_migrations
     migration-lock-timeout: 5m
+    pool:
+      max-open-conns: 20          # default: 25 postgres/mysql, 10 sqlite file, 1 sqlite memory
+      max-idle-conns: 10          # default: 10 postgres/mysql, 5 sqlite file, 1 sqlite memory
+      conn-max-lifetime: 30m      # default: 30m postgres/mysql
+      conn-max-idle-time: 5m      # default: 0 (unlimited)
+      conn-timeout: 30s           # reserved timeout duration
+    session:
+      init-sql: "SET TIME ZONE 'UTC'" # executed upon establishing connection
 
   # Secondary Named DataSources
   additional-datasources:
     # Read-Only Replica
     readonly:
-      driver: mysql
-      url: "${DB_READONLY_DSN:root:secret@tcp(127.0.0.1:3307)/main_db?charset=utf8mb4&parseTime=True&loc=Local}"
-      health-check: true
-
-    # Analytics Warehouse (PostgreSQL)
-    analytics:
       driver: postgres
-      url: "${ANALYTICS_DB_URL:postgres://user:pass@analytics-db:5432/warehouse?sslmode=disable}"
+      url: "${DB_READONLY_URL:postgres://readonly:secret@127.0.0.1:5433/app_db?sslmode=disable}"
       health-check: true
+      pool:
+        max-open-conns: 50
+        max-idle-conns: 25
+        conn-max-lifetime: 15m
+
+    # Analytics Warehouse (MySQL)
+    analytics:
+      driver: mysql
+      url: "${ANALYTICS_DB_URL:user:pass@tcp(analytics-db:3306)/warehouse?parseTime=True}"
+      health-check: true
+      pool:
+        max-open-conns: 10
+        max-idle-conns: 5
 ```
 
 ---

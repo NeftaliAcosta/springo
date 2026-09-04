@@ -2,55 +2,100 @@ package database
 
 import (
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
+	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-// DataSourceProperties defines the database configuration in application.yaml
-type DataSourceProperties struct {
-	Driver               string        `yaml:"driver"`                 // sqlite, mysql, postgres
-	Url                  string        `yaml:"url"`                    // connection string or file path
-	AutoMigrate          bool          `yaml:"auto-migrate"`           // whether to run migrations on startup
-	MigrationTable       string        `yaml:"migration-table"`        // custom name for the control table
-	MigrationLockTimeout time.Duration `yaml:"migration-lock-timeout"` // duration like 5m
-	HealthCheck          bool          `yaml:"health-check"`           // opt-in for health monitoring
+// DataSourcePoolProperties defines connection pool settings for the datasource.
+type DataSourcePoolProperties struct {
+	MaxOpenConns    int           `yaml:"max-open-conns"`
+	MaxIdleConns    int           `yaml:"max-idle-conns"`
+	ConnMaxLifetime time.Duration `yaml:"conn-max-lifetime"`
+	ConnMaxIdleTime time.Duration `yaml:"conn-max-idle-time"`
+	ConnTimeout     time.Duration `yaml:"conn-timeout"`
 }
 
-// AdditionalDataSources holds multiple named datasource configurations
+// Validate checks that connection pool parameters are non-negative.
+func (p *DataSourcePoolProperties) Validate() error {
+	if p.MaxOpenConns < 0 {
+		return fmt.Errorf("pool max-open-conns must be non-negative: %d", p.MaxOpenConns)
+	}
+	if p.MaxIdleConns < 0 {
+		return fmt.Errorf("pool max-idle-conns must be non-negative: %d", p.MaxIdleConns)
+	}
+	if p.ConnMaxLifetime < 0 {
+		return fmt.Errorf("pool conn-max-lifetime must be non-negative: %v", p.ConnMaxLifetime)
+	}
+	if p.ConnMaxIdleTime < 0 {
+		return fmt.Errorf("pool conn-max-idle-time must be non-negative: %v", p.ConnMaxIdleTime)
+	}
+	if p.ConnTimeout < 0 {
+		return fmt.Errorf("pool conn-timeout must be non-negative: %v", p.ConnTimeout)
+	}
+	return nil
+}
+
+// DataSourceSessionProperties defines session-level initialization settings.
+type DataSourceSessionProperties struct {
+	InitSQL string `yaml:"init-sql"`
+}
+
+// Validate validates session-level settings.
+func (p *DataSourceSessionProperties) Validate() error {
+	return nil
+}
+
+// DataSourceProperties defines the database configuration in application.yaml.
+type DataSourceProperties struct {
+	Driver               string                      `yaml:"driver"`                 // sqlite, mysql, postgres
+	Url                  string                      `yaml:"url"`                    // connection string or file path
+	AutoMigrate          bool                        `yaml:"auto-migrate"`           // whether to run migrations on startup
+	MigrationTable       string                      `yaml:"migration-table"`        // custom name for the control table
+	MigrationLockTimeout time.Duration               `yaml:"migration-lock-timeout"` // duration like 5m
+	HealthCheck          bool                        `yaml:"health-check"`           // opt-in for health monitoring
+	Pool                 DataSourcePoolProperties    `yaml:"pool"`
+	Session              DataSourceSessionProperties `yaml:"session"`
+}
+
+// Validate verifies database connection properties and delegates to sub-structures.
+func (p *DataSourceProperties) Validate() error {
+	if err := p.Pool.Validate(); err != nil {
+		return fmt.Errorf("validating datasource pool properties: %w", err)
+	}
+	if err := p.Session.Validate(); err != nil {
+		return fmt.Errorf("validating datasource session properties: %w", err)
+	}
+	return nil
+}
+
+// AdditionalDataSources holds multiple named datasource configurations.
 type AdditionalDataSources map[string]DataSourceProperties
 
 func init() {
-	// Register the primary properties under spring.datasource
+	// Register the primary properties under spring.datasource.
 	config.RegisterProperties("spring.datasource", &DataSourceProperties{
 		MigrationLockTimeout: 5 * time.Minute,
 	})
-	// Register additional datasources under spring.additional-datasources
+	// Register additional datasources under spring.additional-datasources.
 	config.RegisterProperties("spring.additional-datasources", &AdditionalDataSources{})
 }
 
-// Connect establishes a database connection based on properties
+// Connect establishes a database connection based on properties.
 func Connect(props *DataSourceProperties) (*gorm.DB, error) {
 	if props == nil {
 		return nil, fmt.Errorf("datasource properties not found")
 	}
 
-	var dialector gorm.Dialector
-
-	switch props.Driver {
-	case "sqlite":
-		dialector = sqlite.Open(props.Url)
-	case "mysql":
-		dialector = mysql.Open(props.Url)
-	case "postgres":
-		dialector = postgres.Open(props.Url)
-	default:
-		return nil, fmt.Errorf("unsupported database driver: %s", props.Driver)
+	dialector, err := createDialector(props)
+	if err != nil {
+		return nil, err
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{})
@@ -58,31 +103,137 @@ func Connect(props *DataSourceProperties) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	switch props.Driver {
-	case "sqlite":
-		sqlDB, err := db.DB()
-		if err == nil {
-			// Apply WAL mode and busy timeout pragmas for concurrent writes safety
-			db.Exec("PRAGMA journal_mode=WAL;")
-			db.Exec("PRAGMA busy_timeout=5000;")
-			db.Exec("PRAGMA synchronous=NORMAL;")
-
-			// Handle in-memory vs file-based connection pooling
-			if strings.Contains(props.Url, ":memory:") || strings.Contains(props.Url, "mode=memory") {
-				sqlDB.SetMaxOpenConns(1)
-			} else {
-				sqlDB.SetMaxOpenConns(10)
-				sqlDB.SetMaxIdleConns(5)
-			}
-		}
-	case "postgres", "mysql":
-		sqlDB, err := db.DB()
-		if err == nil {
-			sqlDB.SetMaxOpenConns(25)
-			sqlDB.SetMaxIdleConns(10)
-			sqlDB.SetConnMaxLifetime(30 * time.Minute)
-		}
+	if err := configureConnection(db, props); err != nil {
+		return nil, err
 	}
 
 	return db, nil
+}
+
+func createDialector(props *DataSourceProperties) (gorm.Dialector, error) {
+	switch props.Driver {
+	case "sqlite":
+		return sqlite.Open(props.Url), nil
+	case "mysql":
+		return mysql.Open(props.Url), nil
+	case "postgres":
+		return postgres.Open(props.Url), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver: %s", props.Driver)
+	}
+}
+
+func configureConnection(db *gorm.DB, props *DataSourceProperties) error {
+	if props.Driver == "sqlite" {
+		applySQLitePragmas(db)
+	}
+
+	if err := configurePool(db, props); err != nil {
+		return err
+	}
+
+	return executeInitSQL(db, props.Session.InitSQL)
+}
+
+func applySQLitePragmas(db *gorm.DB) {
+	// Apply WAL mode and busy timeout pragmas for concurrent writes safety.
+	db.Exec("PRAGMA journal_mode=WAL;")
+	db.Exec("PRAGMA busy_timeout=5000;")
+	db.Exec("PRAGMA synchronous=NORMAL;")
+}
+
+type poolSettings struct {
+	maxOpen  int
+	maxIdle  int
+	lifetime time.Duration
+	idleTime time.Duration
+}
+
+func resolvePoolSettings(props *DataSourceProperties) poolSettings {
+	settings := poolSettings{
+		maxOpen:  props.Pool.MaxOpenConns,
+		maxIdle:  props.Pool.MaxIdleConns,
+		lifetime: props.Pool.ConnMaxLifetime,
+		idleTime: props.Pool.ConnMaxIdleTime,
+	}
+
+	if props.Driver == "sqlite" {
+		resolveSQLiteDefaults(&settings, props.Url)
+	} else {
+		resolveStandardDefaults(&settings)
+	}
+
+	clampIdleConnections(&settings)
+	return settings
+}
+
+func resolveSQLiteDefaults(settings *poolSettings, url string) {
+	isMemory := strings.Contains(url, ":memory:") || strings.Contains(url, "mode=memory")
+	if settings.maxOpen <= 0 {
+		if isMemory {
+			settings.maxOpen = 1
+		} else {
+			settings.maxOpen = 10
+		}
+	}
+	if settings.maxIdle <= 0 {
+		if isMemory {
+			settings.maxIdle = 1
+		} else {
+			settings.maxIdle = 5
+		}
+	}
+}
+
+func resolveStandardDefaults(settings *poolSettings) {
+	if settings.maxOpen <= 0 {
+		settings.maxOpen = 25
+	}
+	if settings.maxIdle <= 0 {
+		settings.maxIdle = 10
+	}
+	if settings.lifetime <= 0 {
+		settings.lifetime = 30 * time.Minute
+	}
+}
+
+func clampIdleConnections(settings *poolSettings) {
+	if settings.maxOpen > 0 && settings.maxIdle > settings.maxOpen {
+		slog.Warn(
+			"datasource pool max-idle-conns exceeds max-open-conns, clamping to max-open-conns",
+			"max_idle", settings.maxIdle,
+			"max_open", settings.maxOpen,
+		)
+		settings.maxIdle = settings.maxOpen
+	}
+}
+
+func configurePool(db *gorm.DB, props *DataSourceProperties) error {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	settings := resolvePoolSettings(props)
+	sqlDB.SetMaxOpenConns(settings.maxOpen)
+	sqlDB.SetMaxIdleConns(settings.maxIdle)
+
+	if settings.lifetime > 0 {
+		sqlDB.SetConnMaxLifetime(settings.lifetime)
+	}
+	if settings.idleTime > 0 {
+		sqlDB.SetConnMaxIdleTime(settings.idleTime)
+	}
+	return nil
+}
+
+func executeInitSQL(db *gorm.DB, initSQL string) error {
+	trimmed := strings.TrimSpace(initSQL)
+	if trimmed == "" {
+		return nil
+	}
+	if err := db.Exec(trimmed).Error; err != nil {
+		return fmt.Errorf("executing datasource session init-sql: %w", err)
+	}
+	return nil
 }
