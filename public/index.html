@@ -85,7 +85,7 @@
                         'gopher-rotate': 'gopherRotate 8s ease-in-out infinite',
                     },
                     keyframes: {
-                'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (24)',
+                'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (25)',
                 'doc.ioc.title': 'Contenedor IoC y Fábricas de Constructores',
                 'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct, registro condicional (@ConditionalOnProperty) y helpers @Value.',
                 'doc.multidb.title': 'Multi-DataSource y Réplicas de Lectura',
@@ -96,7 +96,7 @@
                 'doc.sched.desc': 'Planificación cron segura en cluster con bloqueos distribuidos en base de datos para evitar ejecuciones concurrentes.',
                 'doc.cache.title': 'Abstracción de Caché y Redis',
                 'doc.cache.desc': 'Interfaz de caché unificada con alternancia transparente entre memoria y Redis mediante application.yaml.',
-                'doc.tut.title': 'Biblioteca Completa de Tutoriales (24 Guías)',
+                'doc.tut.title': 'Biblioteca Completa de Tutoriales (25 Guías)',
                 'doc.tut.desc': 'Documentación paso a paso con rutas de Arquitectura Hexagonal, ejemplos reales de código y comandos CLI.',
                         float: { '0%,100%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-20px)' } },
                         glowPulse: { '0%,100%': { boxShadow: '0 0 20px rgba(142,167,255,.3)' }, '50%': { boxShadow: '0 0 50px rgba(142,167,255,.7)' } },
@@ -1183,7 +1183,7 @@
             <!-- Stats -->
             <div class="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto reveal pb-12">
                 <div class="glass rounded-2xl p-5">
-                    <div class="stat-num">24+</div>
+                    <div class="stat-num">25+</div>
                     <div class="text-slate-400 text-sm mt-1" data-i18n="hero.stat1">Guides &amp; Tutorials</div>
                 </div>
                 <div class="glass rounded-2xl p-5">
@@ -1653,7 +1653,7 @@
                 <button class="tab-btn" onclick="showTab('logging',this)">📝 <span data-i18n="tab.logging">Logging</span></button>
                 <button class="tab-btn" onclick="showTab('cors',this)">🌐 <span data-i18n="tab.cors">CORS</span></button>
                 <button class="tab-btn" onclick="showTab('testing',this)">🧪 <span data-i18n="tab.testing">Testing</span></button>
-                <button class="tab-btn" onclick="showTab('tutorials',this)">📚 <span data-i18n="tab.tutorials">Tutorials (24)</span></button>
+                <button class="tab-btn" onclick="showTab('tutorials',this)">📚 <span data-i18n="tab.tutorials">Tutorials (25)</span></button>
             </div>
 
             <div class="reveal">
@@ -2389,10 +2389,10 @@
                     </div>
                 </div>
 
-                <!-- Tutorials Directory (24 Guides) -->
+                <!-- Tutorials Directory (25 Guides) -->
                 <div id="tab-content-tutorials" class="doc-tab-panel hidden">
                     <div class="mb-6 text-center">
-                        <h3 class="text-white font-bold text-2xl mb-2" data-i18n="doc.tut.title">Complete Tutorial Library (24 Comprehensive Guides)</h3>
+                        <h3 class="text-white font-bold text-2xl mb-2" data-i18n="doc.tut.title">Complete Tutorial Library (25 Comprehensive Guides)</h3>
                         <p class="text-slate-400 text-sm max-w-2xl mx-auto" data-i18n="doc.tut.desc">Step-by-step documentation with Hexagonal Architecture file paths, production code samples, and CLI workflows.</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs font-mono">
@@ -2491,6 +2491,10 @@
                         <a href="https://github.com/NeftaliAcosta/springo/blob/main/docs/tutorials/24_custom_actuator_health_and_telemetry.md" target="_blank" class="glass p-4 rounded-xl hover:border-brand-400 transition-all block">
                             <span class="text-brand-400 font-bold block mb-1">24. Custom Health Probes</span>
                             <span class="text-slate-400 font-sans">RegisterHealthCheck &amp; Kubernetes probe privacy.</span>
+                        </a>
+                        <a href="https://github.com/NeftaliAcosta/springo/blob/main/docs/tutorials/25_api_versioning_and_request_response_middleware.md" target="_blank" class="glass p-4 rounded-xl hover:border-brand-400 transition-all block">
+                            <span class="text-brand-400 font-bold block mb-1">25. API Versioning</span>
+                            <span class="text-slate-400 font-sans">Route groups, scoped middleware &amp; response capture.</span>
                         </a>
                     </div>
                 </div>
@@ -3003,7 +3007,7 @@
         // ──────────────────────────────────────────────────────────
         const translations = {
             en: {
-                'tab.ioc': 'IoC & DI', 'tab.multidb': 'Multi-DataSource', 'tab.validation': 'Validation', 'tab.scheduler': 'Scheduler', 'tab.cache': 'Redis Cache', 'tab.tutorials': 'Tutorials (24)',
+                'tab.ioc': 'IoC & DI', 'tab.multidb': 'Multi-DataSource', 'tab.validation': 'Validation', 'tab.scheduler': 'Scheduler', 'tab.cache': 'Redis Cache', 'tab.tutorials': 'Tutorials (25)',
                 'doc.ioc.title': 'IoC Container & Constructor Factories',
                 'doc.ioc.desc': 'Thread-safe Inversion of Control container with support for (T, error) constructor factories, tag-based field autowiring, conditional bean registration (@ConditionalOnProperty), and @Value helpers.',
                 'doc.multidb.title': 'Multi-DataSource & Read Replicas',
@@ -3014,7 +3018,7 @@
                 'doc.sched.desc': 'Cluster-safe cron scheduling with distributed database locks ensuring only one pod executes a job at any time.',
                 'doc.cache.title': 'Cache Abstraction & Redis',
                 'doc.cache.desc': 'Unified caching interface with transparent switching between in-memory and Redis providers via application.yaml.',
-                'doc.tut.title': 'Complete Tutorial Library (24 Comprehensive Guides)',
+                'doc.tut.title': 'Complete Tutorial Library (25 Comprehensive Guides)',
                 'doc.tut.desc': 'Step-by-step documentation with Hexagonal Architecture file paths, production code samples, and CLI workflows.',
                 'nav.features': 'Features', 'nav.quickstart': 'Quick Start', 'nav.docs': 'Docs', 'nav.compare': 'vs Spring Boot', 'nav.architecture': 'Architecture', 'nav.generator': 'Generator', 'nav.cta': 'Get Started →',
                 'hero.badge': 'v1.0.0-rc19 — Release Candidate', 'hero.h1a': 'Enterprise Go', 'hero.h1b': 'The Spring Way',
@@ -3110,7 +3114,7 @@
                 'footer.credit': 'Built with ❤️ by Neftali Acosta',
             },
             es: {
-                'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (24)',
+                'tab.ioc': 'IoC e Inyección', 'tab.multidb': 'Multi-Base de Datos', 'tab.validation': 'Validación', 'tab.scheduler': 'Tareas Programadas', 'tab.cache': 'Caché Redis', 'tab.tutorials': 'Tutoriales (25)',
                 'doc.ioc.title': 'Contenedor IoC y Fábricas de Constructores',
                 'doc.ioc.desc': 'Contenedor IoC thread-safe con soporte para constructores (T, error), autowiring por tags struct, registro condicional (@ConditionalOnProperty) y helpers @Value.',
                 'doc.multidb.title': 'Multi-DataSource y Réplicas de Lectura',
@@ -3121,7 +3125,7 @@
                 'doc.sched.desc': 'Planificación cron segura en cluster con bloqueos distribuidos en base de datos para evitar ejecuciones concurrentes.',
                 'doc.cache.title': 'Abstracción de Caché y Redis',
                 'doc.cache.desc': 'Interfaz de caché unificada con alternancia transparente entre memoria y Redis mediante application.yaml.',
-                'doc.tut.title': 'Biblioteca Completa de Tutoriales (24 Guías)',
+                'doc.tut.title': 'Biblioteca Completa de Tutoriales (25 Guías)',
                 'doc.tut.desc': 'Documentación paso a paso con rutas de Arquitectura Hexagonal, ejemplos reales de código y comandos CLI.',
                 'nav.features': 'Características', 'nav.quickstart': 'Inicio Rápido', 'nav.docs': 'Documentación', 'nav.compare': 'vs Spring Boot', 'nav.architecture': 'Arquitectura', 'nav.generator': 'Generador', 'nav.cta': 'Empezar →',
                 'hero.badge': 'v1.0.0-rc19 — Versión candidata', 'hero.h1a': 'Go Empresarial', 'hero.h1b': 'Al Estilo Spring',

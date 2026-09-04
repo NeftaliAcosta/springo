@@ -354,6 +354,8 @@ Explore our comprehensive library of step-by-step guides from zero to production
   Active Directory / LDAP authentication, group-to-role mappings, and TLS/StartTLS.
 - 🚨 **[Standardized Error Handling & RFC 7807](docs/tutorials/14_error_handling_and_rfc7807.md)**:
   Domain error sentinels, Problem Details output, and field-level validation errors.
+- 🌐 **[API Versioning & Response Capture Middleware](docs/tutorials/25_api_versioning_and_request_response_middleware.md)**:
+  Route groups with scoped middleware pipelines, response buffering, and payload post-processing.
 
 ### ⚡ Data, Transactions & Background Jobs
 - ⚡ **[Declarative Transaction Management](docs/tutorials/02_transaction_management.md)**:

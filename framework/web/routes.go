@@ -26,7 +26,34 @@ func Register(hook RegistrationHook) {
 	registrationHooks = append(registrationHooks, hook)
 }
 
-// getHooksSnapshot returns a thread-safe copy of the registered hooks
+// RouteGroup registers routes under a sub-path with scoped middleware into the application router.
+func RouteGroup(subPath string, middlewares []func(http.Handler) http.Handler, register func(r chi.Router)) {
+	Register(func(r chi.Router) {
+		RouteGroupOn(r, subPath, middlewares, register)
+	})
+}
+
+// RouteGroupOn registers a grouped sub-path with scoped middleware directly on an existing chi router.
+func RouteGroupOn(
+	r chi.Router,
+	subPath string,
+	middlewares []func(http.Handler) http.Handler,
+	register func(r chi.Router),
+) {
+	if r == nil || register == nil {
+		return
+	}
+	r.Route(subPath, func(sub chi.Router) {
+		for _, mw := range middlewares {
+			if mw != nil {
+				sub.Use(mw)
+			}
+		}
+		register(sub)
+	})
+}
+
+// GetHooksSnapshot returns a thread-safe copy of the registered hooks.
 func getHooksSnapshot() []RegistrationHook {
 	hooksMu.RLock()
 	defer hooksMu.RUnlock()

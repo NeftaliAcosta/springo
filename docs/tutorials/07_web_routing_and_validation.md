@@ -155,3 +155,27 @@ func (c *UserController) uploadAvatar(
     }, nil
 }
 ```
+
+---
+
+## 7. API Versioning & Route Groups with Scoped Middleware
+
+When versioning APIs (`/v1`, `/v2`) with distinct middleware chains (e.g. payload encryption, metrics, or rate limits):
+
+```go
+func init() {
+    // Register v1 route group with custom v1 middleware
+    web.RouteGroup("/v1", []func(http.Handler) http.Handler{v1LegacyHeadersMiddleware}, func(r chi.Router) {
+        r.Get("/products", web.Dispatch(productController.listV1))
+    })
+
+    // Register v2 route group with response capture and modern transformation
+    web.RouteGroup("/v2", []func(http.Handler) http.Handler{web.ResponseCaptureMiddleware}, func(r chi.Router) {
+        r.Get("/products", web.Dispatch(productController.listV2))
+    })
+}
+```
+
+For advanced request/response transformations, HMAC signatures, and encryption pipelines, see
+[Tutorial 25: API Versioning & Request/Response Middleware](25_api_versioning_and_request_response_middleware.md).
+
