@@ -359,3 +359,117 @@ func testTxGormErrorRollback(t *testing.T, db *gorm.DB) {
 		t.Fatal("Expected transaction error due to invalid SQL, got nil")
 	}
 }
+
+func TestTransactional_ReadOnly(t *testing.T) {
+	db := setupTransactionTestDB(t)
+
+	t.Run("ReadOnly transaction sets context flag and operates safely", func(t *testing.T) {
+		testTxReadOnlyBasic(t, db)
+	})
+
+	t.Run("Nested REQUIRES_NEW inside ReadOnly transaction has independent flags", func(t *testing.T) {
+		testTxReadOnlyWithRequiresNew(t, db)
+	})
+
+	t.Run("GetTx helper retrieves active transaction or fallback", func(t *testing.T) {
+		testTxReadOnlyGetTxHelper(t, db)
+	})
+
+	t.Run("RunInTx generic wrapper works with WithReadOnly option", func(t *testing.T) {
+		testTxReadOnlyRunInTx(t, db)
+	})
+}
+
+// TestTxReadOnlyBasic validates that WithReadOnly enables read-only flag and executes properly.
+func testTxReadOnlyBasic(t *testing.T, db *gorm.DB) {
+	db.Exec("DELETE FROM test_entities")
+	_ = db.Create(&TestEntity{Name: "Existing"}).Error
+
+	err := Transactional(context.Background(), func(ctx context.Context) error {
+		assert.True(t, IsTxReadOnly(ctx))
+		tx := GetTx(ctx, db)
+		assert.NotNil(t, tx)
+
+		var count int64
+		if err := tx.Model(&TestEntity{}).Count(&count).Error; err != nil {
+			return err
+		}
+		assert.Equal(t, int64(1), count)
+		return nil
+	}, WithReadOnly())
+
+	assert.NoError(t, err)
+}
+
+// TestTxReadOnlyWithRequiresNew verifies outer read-only status is preserved across REQUIRES_NEW.
+func testTxReadOnlyWithRequiresNew(t *testing.T, db *gorm.DB) {
+	db.Exec("DELETE FROM test_entities")
+
+	err := Transactional(context.Background(), func(ctxOuter context.Context) error {
+		assert.True(t, IsTxReadOnly(ctxOuter))
+
+		// Inner transaction runs as read-write with REQUIRES_NEW
+		innerErr := Transactional(ctxOuter, func(ctxInner context.Context) error {
+			assert.False(t, IsTxReadOnly(ctxInner))
+			txInner := GetTxFromContext(ctxInner)
+			assert.NotNil(t, txInner)
+			return txInner.Create(&TestEntity{Name: "InnerWrite"}).Error
+		}, WithPropagation(PropagationRequiresNew), WithReadOnly(false))
+
+		assert.NoError(t, innerErr)
+		assert.True(t, IsTxReadOnly(ctxOuter))
+		return nil
+	}, WithReadOnly(true))
+
+	assert.NoError(t, err)
+
+	var count int64
+	db.Model(&TestEntity{}).Where("name = ?", "InnerWrite").Count(&count)
+	assert.Equal(t, int64(1), count)
+}
+
+// TestTxReadOnlyGetTxHelper validates GetTx fallback resolution.
+func testTxReadOnlyGetTxHelper(t *testing.T, db *gorm.DB) {
+	// Without transaction in context, returns fallback DB
+	fallbackTx := GetTx(context.Background(), db)
+	assert.Equal(t, db, fallbackTx)
+
+	// Without fallback DB and without transaction, returns nil
+	nilTx := GetTx(context.Background())
+	assert.Nil(t, nilTx)
+
+	// Inside transaction, returns context transaction
+	_ = Transactional(context.Background(), func(ctx context.Context) error {
+		ctxTx := GetTx(ctx, db)
+		assert.NotNil(t, ctxTx)
+		assert.Equal(t, GetTxFromContext(ctx), ctxTx)
+		return nil
+	})
+}
+
+// TestTxReadOnlyRunInTx validates RunInTx with WithReadOnly option.
+func testTxReadOnlyRunInTx(t *testing.T, db *gorm.DB) {
+	db.Exec("DELETE FROM test_entities")
+	_ = db.Create(&TestEntity{Name: "ReadOnlyEntity"}).Error
+
+	count, err := RunInTx(context.Background(), func(ctx context.Context) (int64, error) {
+		assert.True(t, IsTxReadOnly(ctx))
+		var total int64
+		err := GetTx(ctx, db).Model(&TestEntity{}).Count(&total).Error
+		return total, err
+	}, WithReadOnly())
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+}
+
+// TestReadOnly_DialectSQL validates dialect SQL command generation for read-only transactions.
+func TestReadOnly_DialectSQL(t *testing.T) {
+	assert.Equal(t, "SET TRANSACTION READ ONLY", getReadOnlyTxSQL("postgres"))
+	assert.Equal(t, "SET TRANSACTION READ ONLY", getReadOnlyTxSQL("PostgreSQL"))
+	assert.Equal(t, "SET TRANSACTION READ ONLY", getReadOnlyTxSQL("mysql"))
+	assert.Equal(t, "SET TRANSACTION READ ONLY", getReadOnlyTxSQL("MySQL"))
+	assert.Empty(t, getReadOnlyTxSQL("sqlite"))
+	assert.Empty(t, getReadOnlyTxSQL("sqlite3"))
+	assert.Empty(t, getReadOnlyTxSQL("unknown"))
+}

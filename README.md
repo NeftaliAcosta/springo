@@ -362,7 +362,7 @@ Explore our comprehensive library of step-by-step guides from zero to production
 
 ### ⚡ Data, Transactions & Background Jobs
 - ⚡ **[Declarative Transaction Management](docs/tutorials/02_transaction_management.md)**:
-  Spring-like propagation levels, panic/error rollback safety, and post-commit events.
+  Spring-like propagation levels, read-only optimization (`WithReadOnly`), panic/error rollback, and post-commit events.
 - 🗄️ **[Multiple DataSources & Pool Tuning](docs/tutorials/22_multiple_datasources_and_pooling.md)**:
   Primary and named secondary datasources, read replicas, and connection pool sizing.
 - 🗄️ **[SQL & Programmatic Go Migrations](docs/tutorials/18_programmatic_and_sql_migrations.md)**:

@@ -3,17 +3,19 @@ package database
 import (
 	"context"
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/ioc"
 	"log"
+	"strings"
 
+	"github.com/NeftaliAcosta/springo/framework/ioc"
 	"gorm.io/gorm"
 )
 
 type contextKey string
 
 const (
-	txKey     contextKey = "springo_tx"
-	eventsKey contextKey = "springo_events"
+	txKey         contextKey = "springo_tx"
+	eventsKey     contextKey = "springo_events"
+	txReadOnlyKey contextKey = "springo_tx_readonly"
 )
 
 // Propagation defines transaction propagation behaviors matching Spring Boot
@@ -38,6 +40,7 @@ const (
 
 type txConfig struct {
 	propagation Propagation
+	readOnly    bool
 }
 
 // TxOption defines configuration overrides for transactional scopes
@@ -48,6 +51,38 @@ func WithPropagation(p Propagation) TxOption {
 	return func(cfg *txConfig) {
 		cfg.propagation = p
 	}
+}
+
+// WithReadOnly marks the transaction as read-only.
+// When enabled, dialect-specific commands (such as SET TRANSACTION READ ONLY) are issued
+// for PostgreSQL and MySQL. In SQLite, the option is safely handled as a no-op.
+func WithReadOnly(readOnly ...bool) TxOption {
+	return func(cfg *txConfig) {
+		if len(readOnly) == 0 {
+			cfg.readOnly = true
+			return
+		}
+		cfg.readOnly = readOnly[0]
+	}
+}
+
+// IsTxReadOnly returns true if the current transaction context is in read-only mode.
+func IsTxReadOnly(ctx context.Context) bool {
+	if ro, ok := ctx.Value(txReadOnlyKey).(bool); ok {
+		return ro
+	}
+	return false
+}
+
+// GetTx extracts the active transaction from context or returns fallback DB if provided.
+func GetTx(ctx context.Context, fallback ...*gorm.DB) *gorm.DB {
+	if tx := GetTxFromContext(ctx); tx != nil {
+		return tx
+	}
+	if len(fallback) > 0 {
+		return fallback[0]
+	}
+	return nil
 }
 
 // PostCommitHook is a function that runs after a transaction commit
@@ -67,7 +102,7 @@ func RegisterPostCommitHook(hook PostCommitHook) {
 }
 
 // Transactional wraps a function in a database transaction with configurable propagation.
-// It matches Spring Boot's propagation model.
+// It matches Spring Boot's propagation model and supports read-only transaction mode.
 func Transactional(ctx context.Context, fn func(ctx context.Context) error, opts ...TxOption) error {
 	cfg := &txConfig{
 		propagation: PropagationRequired,
@@ -83,16 +118,16 @@ func Transactional(ctx context.Context, fn func(ctx context.Context) error, opts
 		if activeTx != nil {
 			return executeInActiveTx(ctx, activeTx, fn)
 		}
-		return executeInNewTx(ctx, fn)
+		return executeInNewTx(ctx, fn, cfg.readOnly)
 
 	case PropagationRequiresNew:
-		return executeInRequiresNew(ctx, activeTx, fn)
+		return executeInRequiresNew(ctx, activeTx, fn, cfg.readOnly)
 
 	case PropagationNested:
 		if activeTx != nil {
 			return executeInNestedTx(ctx, activeTx, fn)
 		}
-		return executeInNewTx(ctx, fn)
+		return executeInNewTx(ctx, fn, cfg.readOnly)
 
 	case PropagationSupports:
 		return fn(ctx)
@@ -135,13 +170,19 @@ func executeInActiveTx(ctx context.Context, activeTx *gorm.DB, fn func(ctx conte
 }
 
 // ExecuteInRequiresNew suspends active transaction context and executes fn in a new physical transaction.
-func executeInRequiresNew(ctx context.Context, activeTx *gorm.DB, fn func(ctx context.Context) error) error {
+func executeInRequiresNew(
+	ctx context.Context,
+	activeTx *gorm.DB,
+	fn func(ctx context.Context) error,
+	readOnly bool,
+) error {
 	suspendedCtx := ctx
 	if activeTx != nil {
 		suspendedCtx = context.WithValue(ctx, txKey, nil)
 		suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
+		suspendedCtx = context.WithValue(suspendedCtx, txReadOnlyKey, false)
 	}
-	return executeInNewTx(suspendedCtx, fn)
+	return executeInNewTx(suspendedCtx, fn, readOnly)
 }
 
 // ExecuteInNotSupported suspends active transaction context and executes fn without transaction.
@@ -149,6 +190,7 @@ func executeInNotSupported(ctx context.Context, activeTx *gorm.DB, fn func(ctx c
 	if activeTx != nil {
 		suspendedCtx := context.WithValue(ctx, txKey, nil)
 		suspendedCtx = context.WithValue(suspendedCtx, eventsKey, nil)
+		suspendedCtx = context.WithValue(suspendedCtx, txReadOnlyKey, false)
 		return fn(suspendedCtx)
 	}
 	return fn(ctx)
@@ -197,8 +239,27 @@ func executeInNestedTx(ctx context.Context, activeTx *gorm.DB, fn func(ctx conte
 	return nil
 }
 
+// GetReadOnlyTxSQL returns the dialect-specific SQL statement to configure a read-only transaction.
+func getReadOnlyTxSQL(dialector string) string {
+	switch strings.ToLower(dialector) {
+	case "postgres", "postgresql", "mysql":
+		return "SET TRANSACTION READ ONLY"
+	default:
+		return ""
+	}
+}
+
+// ApplyReadOnlyMode executes dialect-specific directives to configure transaction as read-only.
+func applyReadOnlyMode(tx *gorm.DB) error {
+	sqlStatement := getReadOnlyTxSQL(tx.Name())
+	if sqlStatement == "" {
+		return nil
+	}
+	return tx.Exec(sqlStatement).Error
+}
+
 // ExecuteInNewTx starts a new physical GORM transaction and executes fn with rollback safety on error or panic.
-func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) error {
+func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error, readOnly bool) error {
 	db := ioc.GetContainer().GetDB()
 	if db == nil {
 		return fmt.Errorf("transaction failed: primary database connection not found in container")
@@ -207,6 +268,13 @@ func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) err
 	tx := db.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
+
+	if readOnly {
+		if err := applyReadOnlyMode(tx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("failed to set read-only transaction: %w", err)
+		}
 	}
 
 	defer func() {
@@ -219,6 +287,7 @@ func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error) err
 	var eventBuffer []interface{}
 	txCtx := context.WithValue(ctx, txKey, tx)
 	txCtx = context.WithValue(txCtx, eventsKey, &eventBuffer)
+	txCtx = context.WithValue(txCtx, txReadOnlyKey, readOnly)
 
 	if err := fn(txCtx); err != nil {
 		_ = tx.Rollback()
