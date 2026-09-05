@@ -351,8 +351,8 @@ Explore our comprehensive library of step-by-step guides from zero to production
   Validation groups (`OnCreate`, `OnUpdate`), custom validator tags, and Problem Details.
 - 🌐 **[CORS & Origin Whitelist Configuration](docs/tutorials/21_cors_whitelist_configuration.md)**:
   Exact origin whitelist, dynamic wildcard patterns, credentials, and preflight caching.
-- 🔐 **[JWT Security, OWASP Headers & Middleware](docs/tutorials/08_security_jwt_and_middleware.md)**:
-  JWT (HS256/RS256 JWKS), claims extraction, security headers, CSRF, and custom middlewares.
+- 🔐 **[JWT Security, Stateless API Pipeline & Middleware](docs/tutorials/08_security_jwt_and_middleware.md)**:
+  OAuth2/JWT (HS256/RS256 JWKS), stateless API security pipeline (`server.security`), OWASP headers, and CSRF.
 - 🏢 **[Corporate Security & Active Directory LDAP](docs/tutorials/20_corporate_security_and_ldap.md)**:
   Active Directory / LDAP authentication, group-to-role mappings, and TLS/StartTLS.
 - 🚨 **[Standardized Error Handling & RFC 7807](docs/tutorials/14_error_handling_and_rfc7807.md)**:

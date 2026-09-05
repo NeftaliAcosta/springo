@@ -32,51 +32,147 @@ func init() {
 	config.RegisterProperties("server.cors", &CorsProperties{})
 }
 
-// validateAndPrepareConfig performs enterprise security checks and compiles patterns
+// validateAndPrepareConfig performs enterprise security checks and compiles patterns.
 func validateAndPrepareConfig(props *CorsProperties) {
 	cacheOnce.Do(func() {
 		if props == nil {
 			return
 		}
 
-		// Security Check: If credentials are allowed, origins cannot be "*"
-		if props.AllowCredentials {
-			for _, o := range props.AllowedOrigins {
-				if o == "*" {
-					configError = fmt.Errorf("insecure CORS configuration: 'allow-credentials' is true but 'allowed-origins' contains '*'")
-					log.Printf("❌ [CORS ERROR] %v", configError)
-					return
-				}
-			}
+		if err := validateCredentialsOrigin(props); err != nil {
+			configError = err
+			log.Printf("❌ [CORS ERROR] %v", configError)
+			return
 		}
 
-		// Pre-compile origin patterns for performance
-		for _, pattern := range props.AllowedOriginPatterns {
-			// Convert wildcard patterns (e.g. *.example.com) to valid regex
-			regexStr := strings.ReplaceAll(pattern, ".", "\\.")
-			regexStr = strings.ReplaceAll(regexStr, "*", ".*")
-			regexStr = "^" + regexStr + "$"
-
-			re, err := regexp.Compile(regexStr)
-			if err != nil {
-				log.Printf("⚠️ [CORS] Invalid origin pattern ignored: %s", pattern)
-				continue
-			}
-			patternCache = append(patternCache, re)
-		}
+		compileOriginPatterns(props.AllowedOriginPatterns)
 	})
 }
 
-// CorsMiddleware handles Cross-Origin Resource Sharing based on YAML configuration
+// validateCredentialsOrigin checks that wildcard origins are not used when allow-credentials is true.
+func validateCredentialsOrigin(props *CorsProperties) error {
+	if !props.AllowCredentials {
+		return nil
+	}
+
+	for _, o := range props.AllowedOrigins {
+		if o == "*" {
+			return fmt.Errorf("insecure CORS configuration: 'allow-credentials' is true but 'allowed-origins' contains '*'")
+		}
+	}
+	return nil
+}
+
+// compileOriginPatterns converts wildcard patterns (e.g. *.example.com) to regex and caches them.
+func compileOriginPatterns(patterns []string) {
+	for _, pattern := range patterns {
+		regexStr := strings.ReplaceAll(pattern, ".", "\\.")
+		regexStr = strings.ReplaceAll(regexStr, "*", ".*")
+		regexStr = "^" + regexStr + "$"
+
+		re, err := regexp.Compile(regexStr)
+		if err != nil {
+			log.Printf("⚠️ [CORS] Invalid origin pattern ignored: %s", pattern)
+			continue
+		}
+		patternCache = append(patternCache, re)
+	}
+}
+
+// isCorsDisabled checks if CORS processing should be skipped based on configuration.
+func isCorsDisabled(props *CorsProperties) bool {
+	if props == nil {
+		return true
+	}
+	serverProps := config.Get[WebServerProperties]()
+	return serverProps != nil && !serverProps.Security.IsCorsEnabled()
+}
+
+// isExactOriginAllowed checks if the origin matches any explicitly allowed origin.
+func isExactOriginAllowed(allowedOrigins []string, allowCredentials bool, origin string) bool {
+	for _, o := range allowedOrigins {
+		if o == "*" && !allowCredentials {
+			return true
+		}
+		if o == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// isPatternOriginAllowed checks if the origin matches any compiled regex pattern.
+func isPatternOriginAllowed(origin string) bool {
+	for _, re := range patternCache {
+		if re.MatchString(origin) {
+			return true
+		}
+	}
+	return false
+}
+
+// isOriginAllowed determines if the requested origin is permitted by exact match or pattern.
+func isOriginAllowed(props *CorsProperties, origin string) bool {
+	if isExactOriginAllowed(props.AllowedOrigins, props.AllowCredentials, origin) {
+		return true
+	}
+	return isPatternOriginAllowed(origin)
+}
+
+// applyOriginHeaders sets Access-Control-Allow-Origin and Vary headers.
+func applyOriginHeaders(w http.ResponseWriter, props *CorsProperties, origin string) {
+	if props.AllowCredentials || !contains(props.AllowedOrigins, "*") {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+}
+
+// applyCorsHeaders sets standard CORS response headers for allowed origins.
+func applyCorsHeaders(w http.ResponseWriter, props *CorsProperties, origin string) {
+	applyOriginHeaders(w, props, origin)
+
+	if props.AllowCredentials {
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	}
+	if len(props.ExposedHeaders) > 0 {
+		w.Header().Set("Access-Control-Expose-Headers", strings.Join(props.ExposedHeaders, ", "))
+	}
+}
+
+// applyPreflightHeaders sets preflight CORS headers for OPTIONS requests.
+func applyPreflightHeaders(w http.ResponseWriter, props *CorsProperties) {
+	if len(props.AllowedMethods) > 0 {
+		w.Header().Set("Access-Control-Allow-Methods", strings.Join(props.AllowedMethods, ", "))
+	}
+	if len(props.AllowedHeaders) > 0 {
+		w.Header().Set("Access-Control-Allow-Headers", strings.Join(props.AllowedHeaders, ", "))
+	}
+	if props.MaxAge > 0 {
+		w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", props.MaxAge))
+	}
+}
+
+// handlePreflight processes preflight OPTIONS requests and returns true if handled.
+func handlePreflight(w http.ResponseWriter, r *http.Request, props *CorsProperties) bool {
+	if r.Method != http.MethodOptions {
+		return false
+	}
+	applyPreflightHeaders(w, props)
+	w.WriteHeader(http.StatusNoContent)
+	return true
+}
+
+// CorsMiddleware handles Cross-Origin Resource Sharing based on YAML configuration.
 func CorsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		props := config.Get[CorsProperties]()
-		if props == nil {
+		if isCorsDisabled(props) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// Ensure config is validated and patterns are compiled (lazy-init)
 		validateAndPrepareConfig(props)
 		if configError != nil {
 			http.Error(w, "Internal Server Error: Invalid CORS Configuration", http.StatusInternalServerError)
@@ -84,67 +180,14 @@ func CorsMiddleware(next http.Handler) http.Handler {
 		}
 
 		origin := r.Header.Get("Origin")
-		if origin == "" {
+		if origin == "" || !isOriginAllowed(props, origin) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		isAllowed := false
-
-		// 1. Check exact origins
-		for _, o := range props.AllowedOrigins {
-			if o == "*" {
-				if !props.AllowCredentials {
-					isAllowed = true
-					break
-				}
-			} else if o == origin {
-				isAllowed = true
-				break
-			}
-		}
-
-		// 2. Check origin patterns if not already allowed
-		if !isAllowed && len(patternCache) > 0 {
-			for _, re := range patternCache {
-				if re.MatchString(origin) {
-					isAllowed = true
-					break
-				}
-			}
-		}
-
-		if isAllowed {
-			// Set Origin header
-			if props.AllowCredentials || !contains(props.AllowedOrigins, "*") {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Vary", "Origin") // Essential for caching when origin is dynamic
-			} else {
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-			}
-
-			if props.AllowCredentials {
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-
-			if len(props.ExposedHeaders) > 0 {
-				w.Header().Set("Access-Control-Expose-Headers", strings.Join(props.ExposedHeaders, ", "))
-			}
-
-			// Handle Preflight (OPTIONS) requests
-			if r.Method == http.MethodOptions {
-				if len(props.AllowedMethods) > 0 {
-					w.Header().Set("Access-Control-Allow-Methods", strings.Join(props.AllowedMethods, ", "))
-				}
-				if len(props.AllowedHeaders) > 0 {
-					w.Header().Set("Access-Control-Allow-Headers", strings.Join(props.AllowedHeaders, ", "))
-				}
-				if props.MaxAge > 0 {
-					w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", props.MaxAge))
-				}
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
+		applyCorsHeaders(w, props, origin)
+		if handlePreflight(w, r, props) {
+			return
 		}
 
 		next.ServeHTTP(w, r)

@@ -54,14 +54,15 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 }
 
 type WebServerProperties struct {
-	Port              int                 `yaml:"port"`
-	TrustedProxies    []string            `yaml:"trusted-proxies"`
-	API               APIProperties       `yaml:"api"`
-	Multipart         MultipartProperties `yaml:"multipart"`
-	ReadHeaderTimeout time.Duration       `yaml:"read-header-timeout"`
-	ReadTimeout       time.Duration       `yaml:"read-timeout"`
-	WriteTimeout      time.Duration       `yaml:"write-timeout"`
-	IdleTimeout       time.Duration       `yaml:"idle-timeout"`
+	Port              int                      `yaml:"port"`
+	TrustedProxies    []string                 `yaml:"trusted-proxies"`
+	API               APIProperties            `yaml:"api"`
+	Multipart         MultipartProperties      `yaml:"multipart"`
+	Security          ServerSecurityProperties `yaml:"security"`
+	ReadHeaderTimeout time.Duration            `yaml:"read-header-timeout"`
+	ReadTimeout       time.Duration            `yaml:"read-timeout"`
+	WriteTimeout      time.Duration            `yaml:"write-timeout"`
+	IdleTimeout       time.Duration            `yaml:"idle-timeout"`
 }
 
 // MultipartProperties controls multipart/form-data request processing.
@@ -84,7 +85,10 @@ func (p *WebServerProperties) Validate() error {
 	if err := p.API.Validate(); err != nil {
 		return err
 	}
-	return p.Multipart.Validate()
+	if err := p.Multipart.Validate(); err != nil {
+		return err
+	}
+	return p.Security.Validate()
 }
 
 // Validate normalizes and validates the API base path.

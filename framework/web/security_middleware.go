@@ -245,23 +245,64 @@ func enrichDynamicClaims(ctx context.Context, claims jwt.MapClaims) context.Cont
 	return ctx
 }
 
-// SecurityHeadersMiddleware adds basic security headers to every response.
+// SecurityHeadersMiddleware adds configurable security headers to every response.
 func SecurityHeadersMiddleware(next http.Handler) http.Handler {
-	cspHeader := "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("X-XSS-Protection", "0")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
-		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
-		w.Header().Set("Content-Security-Policy", cspHeader)
+		serverProps := config.Get[WebServerProperties]()
+		if serverProps != nil && !serverProps.Security.IsSecurityHeadersEnabled() {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		headersConfig := resolveSecurityHeaders(serverProps)
+		applyStandardSecurityHeaders(w, headersConfig)
 
 		if shouldApplyHSTS(r) {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			w.Header().Set("Strict-Transport-Security", headersConfig.HSTS.FormatHeader())
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// resolveSecurityHeaders provides configured headers with defaults for unset values.
+func resolveSecurityHeaders(serverProps *WebServerProperties) SecurityHeadersProperties {
+	var cfg SecurityHeadersProperties
+	if serverProps != nil {
+		cfg = serverProps.Security.Headers
+	}
+	if cfg.ContentTypeOptions == "" {
+		cfg.ContentTypeOptions = DefaultContentTypeOptions
+	}
+	if cfg.FrameOptions == "" {
+		cfg.FrameOptions = DefaultFrameOptions
+	}
+	if cfg.XSSProtection == "" {
+		cfg.XSSProtection = DefaultXSSProtection
+	}
+	if cfg.ReferrerPolicy == "" {
+		cfg.ReferrerPolicy = DefaultReferrerPolicy
+	}
+	if cfg.PermissionsPolicy == "" {
+		cfg.PermissionsPolicy = DefaultPermissionsPolicy
+	}
+	if cfg.CrossDomainPolicies == "" {
+		cfg.CrossDomainPolicies = DefaultCrossDomainPolicies
+	}
+	if cfg.ContentSecurityPolicy == "" {
+		cfg.ContentSecurityPolicy = DefaultContentSecurityPolicy
+	}
+	return cfg
+}
+
+// applyStandardSecurityHeaders writes baseline security headers to the response writer.
+func applyStandardSecurityHeaders(w http.ResponseWriter, cfg SecurityHeadersProperties) {
+	w.Header().Set("X-Content-Type-Options", cfg.ContentTypeOptions)
+	w.Header().Set("X-Frame-Options", cfg.FrameOptions)
+	w.Header().Set("X-XSS-Protection", cfg.XSSProtection)
+	w.Header().Set("Referrer-Policy", cfg.ReferrerPolicy)
+	w.Header().Set("Permissions-Policy", cfg.PermissionsPolicy)
+	w.Header().Set("X-Permitted-Cross-Domain-Policies", cfg.CrossDomainPolicies)
+	w.Header().Set("Content-Security-Policy", cfg.ContentSecurityPolicy)
 }
 
 func shouldApplyHSTS(r *http.Request) bool {

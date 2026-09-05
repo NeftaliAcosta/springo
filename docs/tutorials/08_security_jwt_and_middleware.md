@@ -123,7 +123,54 @@ func init() {
 
 ---
 
-## 5. Custom Middleware Integration
+## 5. Web Server Security Pipeline & Stateless REST API Mode (`server.security`)
+
+SprinGo provides a modular, zero-config HTTP security pipeline configured under `server.security`:
+
+```yaml
+server:
+  security:
+    csrf-enabled: false              # Default: false (stateless REST APIs / OAuth2 Bearer tokens)
+    security-headers-enabled: true   # Default: true (OWASP security headers)
+    cors-enabled: true               # Default: true (Cross-Origin Resource Sharing)
+    headers:
+      content-type-options: "nosniff"
+      frame-options: "DENY"          # DENY | SAMEORIGIN
+      xss-protection: "0"
+      referrer-policy: "strict-origin-when-cross-origin"
+      permissions-policy: "camera=(), microphone=(), geolocation=(), payment=()"
+      cross-domain-policies: "none"
+      content-security-policy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+      hsts:
+        max-age: 31536000            # Seconds (default: 1 year)
+        include-subdomains: true     # Include subdomains (default: true)
+        preload: false               # Preload header flag (default: false)
+  cors:
+    allowed-origins:
+      - "${FRONTEND_URL:http://localhost:3000}"
+    allowed-methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allowed-headers: ["Authorization", "Content-Type", "X-Requested-With", "X-Trace-ID"]
+    allow-credentials: true
+    max-age: 3600
+```
+
+### When to Keep CSRF Disabled vs When to Enable It
+- **Stateless REST APIs (Default):** APIs authenticating via `Authorization: Bearer <token>` (JWT / OAuth2) are immune to CSRF because browsers do not automatically attach Bearer headers on cross-site requests. SprinGo automatically disables CSRF protection when OAuth2 Resource Server is active or by default.
+- **Cookie-Based Web Applications:** If your application relies on ambient browser cookies or session cookies for authentication, enable CSRF explicitly:
+  ```yaml
+  server:
+    security:
+      csrf-enabled: true
+  spring:
+    security:
+      csrf:
+        cookie-name: "XSRF-TOKEN"
+        header-name: "X-XSRF-TOKEN"
+  ```
+
+---
+
+## 6. Custom Middleware Integration
 
 Register global middlewares during bootstrap:
 

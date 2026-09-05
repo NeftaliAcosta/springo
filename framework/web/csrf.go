@@ -84,12 +84,25 @@ func validateCsrfToken(r *http.Request, props *CsrfProperties) error {
 	return nil
 }
 
-// CsrfMiddleware enforces Double Submit Cookie CSRF protection
+// CsrfMiddleware enforces Double Submit Cookie CSRF protection.
 func CsrfMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		props := getCsrfProperties()
+		serverProps := config.Get[WebServerProperties]()
+		isCsrfActive := false
+		if serverProps != nil {
+			isCsrfActive = serverProps.Security.IsCsrfEnabled()
+		} else {
+			csrfProps := getCsrfProperties()
+			isCsrfActive = csrfProps.Enabled
+		}
 
-		if !props.Enabled || isPublicPath(r.URL.Path, props.PublicPaths) {
+		if !isCsrfActive {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		props := getCsrfProperties()
+		if isPublicPath(r.URL.Path, props.PublicPaths) {
 			next.ServeHTTP(w, r)
 			return
 		}
