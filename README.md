@@ -111,6 +111,8 @@ springo make repository Invoice
 springo make service Invoice
 springo make controller Invoice
 springo make migration CreateInvoicesTable
+# Generate SQL migration (.sql + .undo.sql)
+springo make migration CreateInvoicesTable --sql
 ```
 
 ### Database Migrations & Route Discovery
@@ -120,6 +122,7 @@ springo make migration CreateInvoicesTable
 springo migrate
 springo migrate status
 springo migrate rollback --steps=1
+springo migrate reset
 
 # Terminal route discovery
 springo routes

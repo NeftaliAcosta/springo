@@ -52,16 +52,36 @@ func (p *DataSourceSessionProperties) Validate() error {
 	return nil
 }
 
+// DataSourceMigrationProperties defines configuration for SQL file discovery, baseline, and migration table.
+type DataSourceMigrationProperties struct {
+	Table             string        `yaml:"table"`               // custom control table name (default: "springo_migrations")
+	LockTimeout       time.Duration `yaml:"lock-timeout"`        // cluster lock timeout (default: 5m)
+	Locations         []string      `yaml:"locations"`           // directories to scan for SQL migration files
+	SQLPrefix         string        `yaml:"sql-prefix"`          // prefix for versioned SQL migrations (default: "V")
+	BaselineOnMigrate bool          `yaml:"baseline-on-migrate"` // if true, marks migrations <= baseline-version as applied
+	BaselineVersion   string        `yaml:"baseline-version"`    // baseline threshold version (default: "0")
+	OutOfOrder        bool          `yaml:"out-of-order"`        // whether to allow out-of-order migrations
+}
+
+// Validate validates migration configuration parameters.
+func (p *DataSourceMigrationProperties) Validate() error {
+	if p.LockTimeout < 0 {
+		return fmt.Errorf("migration lock-timeout must be non-negative: %v", p.LockTimeout)
+	}
+	return nil
+}
+
 // DataSourceProperties defines the database configuration in application.yaml.
 type DataSourceProperties struct {
-	Driver               string                      `yaml:"driver"`                 // sqlite, mysql, postgres
-	Url                  string                      `yaml:"url"`                    // connection string or file path
-	AutoMigrate          bool                        `yaml:"auto-migrate"`           // whether to run migrations on startup
-	MigrationTable       string                      `yaml:"migration-table"`        // custom name for the control table
-	MigrationLockTimeout time.Duration               `yaml:"migration-lock-timeout"` // duration like 5m
-	HealthCheck          bool                        `yaml:"health-check"`           // opt-in for health monitoring
-	Pool                 DataSourcePoolProperties    `yaml:"pool"`
-	Session              DataSourceSessionProperties `yaml:"session"`
+	Driver               string                        `yaml:"driver"`                 // sqlite, mysql, postgres
+	Url                  string                        `yaml:"url"`                    // connection string or file path
+	AutoMigrate          bool                          `yaml:"auto-migrate"`           // whether to run migrations on startup
+	MigrationTable       string                        `yaml:"migration-table"`        // custom name for the control table (legacy)
+	MigrationLockTimeout time.Duration                 `yaml:"migration-lock-timeout"` // duration like 5m (legacy)
+	HealthCheck          bool                          `yaml:"health-check"`           // opt-in for health monitoring
+	Pool                 DataSourcePoolProperties      `yaml:"pool"`
+	Session              DataSourceSessionProperties   `yaml:"session"`
+	Migration            DataSourceMigrationProperties `yaml:"migration"`
 }
 
 // Validate verifies database connection properties and delegates to sub-structures.
@@ -72,7 +92,48 @@ func (p *DataSourceProperties) Validate() error {
 	if err := p.Session.Validate(); err != nil {
 		return fmt.Errorf("validating datasource session properties: %w", err)
 	}
+	if err := p.Migration.Validate(); err != nil {
+		return fmt.Errorf("validating datasource migration properties: %w", err)
+	}
 	return nil
+}
+
+// GetMigrationTableName returns the configured migration control table name with fallbacks.
+func (p *DataSourceProperties) GetMigrationTableName() string {
+	if p.Migration.Table != "" {
+		return p.Migration.Table
+	}
+	if p.MigrationTable != "" {
+		return p.MigrationTable
+	}
+	return "springo_migrations"
+}
+
+// GetMigrationLockTimeout returns the configured migration lock timeout with fallbacks.
+func (p *DataSourceProperties) GetMigrationLockTimeout() time.Duration {
+	if p.Migration.LockTimeout > 0 {
+		return p.Migration.LockTimeout
+	}
+	if p.MigrationLockTimeout > 0 {
+		return p.MigrationLockTimeout
+	}
+	return 5 * time.Minute
+}
+
+// GetSQLPrefix returns the SQL migration filename prefix.
+func (p *DataSourceProperties) GetSQLPrefix() string {
+	if p.Migration.SQLPrefix != "" {
+		return p.Migration.SQLPrefix
+	}
+	return "V"
+}
+
+// GetBaselineVersion returns the baseline cutoff version string.
+func (p *DataSourceProperties) GetBaselineVersion() string {
+	if p.Migration.BaselineVersion != "" {
+		return p.Migration.BaselineVersion
+	}
+	return "0"
 }
 
 // AdditionalDataSources holds multiple named datasource configurations.

@@ -98,59 +98,60 @@ func TestFullEndToEndCLIWorkflow(t *testing.T) {
 	}
 	defer func() { _ = os.Chdir(origWd) }()
 
-	// Execute all make generators
-	components := []string{"Widget"}
-	for _, comp := range components {
-		if err := makeModelCmd.RunE(makeModelCmd, []string{comp}); err != nil {
-			t.Fatalf("make model failed: %v", err)
-		}
-		if err := makeDtoCmd.RunE(makeDtoCmd, []string{comp}); err != nil {
-			t.Fatalf("make dto failed: %v", err)
-		}
-		if err := makeRepoCmd.RunE(makeRepoCmd, []string{comp}); err != nil {
-			t.Fatalf("make repo failed: %v", err)
-		}
-		if err := makeServiceCmd.RunE(makeServiceCmd, []string{comp}); err != nil {
-			t.Fatalf("make service failed: %v", err)
-		}
-		if err := makeControllerCmd.RunE(makeControllerCmd, []string{comp}); err != nil {
-			t.Fatalf("make controller failed: %v", err)
-		}
-		if err := makeMigrationCmd.RunE(makeMigrationCmd, []string{"CreateWidgetsTable"}); err != nil {
-			t.Fatalf("make migration failed: %v", err)
+	executeMakeGenerators(t, "Widget")
+	verifyProjectBuild(t)
+
+	verifyProjectActions(t, []string{"migrate"}, []string{"status"}, []string{"routes"})
+	verifyConcurrentRunners(t)
+	verifyProjectActions(t, []string{"rollback", "1"}, []string{"refresh"}, []string{"reset"})
+}
+
+func executeMakeGenerators(t *testing.T, component string) {
+	t.Helper()
+	commands := []struct {
+		name string
+		run  func() error
+	}{
+		{"model", func() error { return makeModelCmd.RunE(makeModelCmd, []string{component}) }},
+		{"dto", func() error { return makeDtoCmd.RunE(makeDtoCmd, []string{component}) }},
+		{"repo", func() error { return makeRepoCmd.RunE(makeRepoCmd, []string{component}) }},
+		{"service", func() error { return makeServiceCmd.RunE(makeServiceCmd, []string{component}) }},
+		{"controller", func() error { return makeControllerCmd.RunE(makeControllerCmd, []string{component}) }},
+		{"migration", func() error { return makeMigrationCmd.RunE(makeMigrationCmd, []string{"CreateWidgetsTable"}) }},
+	}
+
+	for _, cmd := range commands {
+		if err := cmd.run(); err != nil {
+			t.Fatalf("make %s failed: %v", cmd.name, err)
 		}
 	}
 
-	// Run go mod tidy
+	sqlMigrationFlag = true
+	defer func() { sqlMigrationFlag = false }()
+	if err := makeMigrationCmd.RunE(makeMigrationCmd, []string{"create_orders_table"}); err != nil {
+		t.Fatalf("make sql migration failed: %v", err)
+	}
+}
+
+func verifyProjectBuild(t *testing.T) {
+	t.Helper()
 	cmdTidy := exec.Command("go", "mod", "tidy")
 	if out, err := cmdTidy.CombinedOutput(); err != nil {
 		t.Fatalf("go mod tidy failed: %v\nOutput: %s", err, string(out))
 	}
 
-	// Verify project compiles completely with go test ./...
 	cmdTest := exec.Command("go", "test", "./...")
 	if out, err := cmdTest.CombinedOutput(); err != nil {
 		t.Fatalf("go test ./... failed in generated project: %v\nOutput: %s", err, string(out))
 	}
+}
 
-	// Test migration runner status and execution
-	if err := runProjectAction("migrate"); err != nil {
-		t.Fatalf("runProjectAction migrate failed: %v", err)
-	}
-
-	if err := runProjectAction("status"); err != nil {
-		t.Fatalf("runProjectAction status failed: %v", err)
-	}
-
-	if err := runProjectAction("routes"); err != nil {
-		t.Fatalf("runProjectAction routes failed: %v", err)
-	}
-
-	// Concurrent invocations must use distinct runner files and clean up only
-	// their own files.
+func verifyConcurrentRunners(t *testing.T) {
+	t.Helper()
 	const concurrentRunners = 4
 	var wg sync.WaitGroup
 	errCh := make(chan error, concurrentRunners)
+
 	for i := 0; i < concurrentRunners; i++ {
 		wg.Add(1)
 		go func() {
@@ -160,6 +161,7 @@ func TestFullEndToEndCLIWorkflow(t *testing.T) {
 	}
 	wg.Wait()
 	close(errCh)
+
 	for err := range errCh {
 		if err != nil {
 			t.Fatalf("concurrent routes runner failed: %v", err)
@@ -173,16 +175,17 @@ func TestFullEndToEndCLIWorkflow(t *testing.T) {
 	if len(remaining) != 0 {
 		t.Fatalf("temporary runners were not cleaned up: %v", remaining)
 	}
+}
 
-	if err := runProjectAction("rollback", "1"); err != nil {
-		t.Fatalf("runProjectAction rollback failed: %v", err)
-	}
-
-	if err := runProjectAction("refresh"); err != nil {
-		t.Fatalf("runProjectAction refresh failed: %v", err)
-	}
-
-	if err := runProjectAction("reset"); err != nil {
-		t.Fatalf("runProjectAction reset failed: %v", err)
+func verifyProjectActions(t *testing.T, actions ...[]string) {
+	t.Helper()
+	for _, action := range actions {
+		if len(action) == 0 {
+			continue
+		}
+		if err := runProjectAction(action[0], action[1:]...); err != nil {
+			t.Fatalf("runProjectAction %v failed: %v", action, err)
+		}
 	}
 }
+

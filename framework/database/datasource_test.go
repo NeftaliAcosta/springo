@@ -215,6 +215,12 @@ func TestDataSourcePropertiesValidate(t *testing.T) {
 				Pool: DataSourcePoolProperties{ConnTimeout: -1 * time.Second},
 			},
 		},
+		{
+			name: "negative migration lock timeout",
+			props: DataSourceProperties{
+				Migration: DataSourceMigrationProperties{LockTimeout: -1 * time.Second},
+			},
+		},
 	}
 
 	for _, tc := range invalidPoolCases {

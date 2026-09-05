@@ -115,12 +115,15 @@ func buildTemplateData(rawName string) (MakeTemplateData, error) {
 	}, nil
 }
 
+var sqlMigrationFlag bool
+
 func init() {
 	makeCmd.AddCommand(makeControllerCmd)
 	makeCmd.AddCommand(makeServiceCmd)
 	makeCmd.AddCommand(makeRepoCmd)
 	makeCmd.AddCommand(makeModelCmd)
 	makeCmd.AddCommand(makeDtoCmd)
+	makeMigrationCmd.Flags().BoolVarP(&sqlMigrationFlag, "sql", "s", false, "Generate SQL migration files (Up & Undo)")
 	makeCmd.AddCommand(makeMigrationCmd)
 	makeCmd.AddCommand(makeJobCmd)
 	makeCmd.AddCommand(makeEventCmd)
@@ -302,7 +305,24 @@ var makeMigrationCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		timestamp := time.Now().Format("20060102_150405")
-		migName := timestamp + "_" + strings.ToLower(args[0])
+		nameSlug := strings.ToLower(args[0])
+		if sqlMigrationFlag {
+			upTarget := filepath.Join("resources", "db", "migration", timestamp+"__"+nameSlug+".sql")
+			undoTarget := filepath.Join("resources", "db", "migration", timestamp+"__"+nameSlug+".undo.sql")
+			upHeader := fmt.Sprintf("-- Migration: %s__%s\n-- Created at: %s\n\n", timestamp, nameSlug, time.Now().Format(time.RFC3339))
+			undoHeader := fmt.Sprintf("-- Undo Migration: %s__%s\n-- Created at: %s\n\n", timestamp, nameSlug, time.Now().Format(time.RFC3339))
+			if err := writeGeneratedFile(upTarget, []byte(upHeader)); err != nil {
+				return err
+			}
+			if err := writeGeneratedFile(undoTarget, []byte(undoHeader)); err != nil {
+				return err
+			}
+			fmt.Printf("✅ Created SQL migration: %s\n", upTarget)
+			fmt.Printf("✅ Created Undo SQL migration: %s\n", undoTarget)
+			return nil
+		}
+
+		migName := timestamp + "_" + nameSlug
 		data := MakeTemplateData{
 			MigrationName:   migName,
 			FrameworkModule: getFrameworkModule(),
