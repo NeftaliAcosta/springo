@@ -3,10 +3,11 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"gorm.io/gorm"
 )
 
@@ -212,7 +213,10 @@ func executeInNestedTx(ctx context.Context, activeTx *gorm.DB, fn func(ctx conte
 	defer func() {
 		if r := recover(); r != nil {
 			if err := activeTx.RollbackTo(spName).Error; err != nil {
-				log.Printf("⚠️ [Transaction] Rollback to savepoint %s failed on panic: %v", spName, err)
+				slog.Warn(fmt.Sprintf("⚠️ [Transaction] Rollback to savepoint %s failed on panic", spName),
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.String("savepoint", spName),
+					slog.Any("error", err))
 			}
 			if ok && buffer != nil {
 				*buffer = (*buffer)[:initialLen]

@@ -4,11 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
-	"github.com/NeftaliAcosta/springo/framework/database"
-	"github.com/NeftaliAcosta/springo/framework/ioc"
-	"github.com/NeftaliAcosta/springo/framework/web"
-	"log"
+	"log/slog"
 	"os"
 	"reflect"
 	"runtime"
@@ -17,6 +13,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/database"
+	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/logging"
+	"github.com/NeftaliAcosta/springo/framework/web"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -44,7 +45,10 @@ func RegisterListener(handler interface{}) {
 	// 1. Architecture Enforcement
 	_, file, _, _ := runtime.Caller(1)
 	if !strings.Contains(file, "internal/infrastructure/input/events") && !strings.Contains(file, "framework/event") {
-		log.Printf("❌ [Architecture Error] Event listener MUST reside in 'internal/infrastructure/input/events/'. Found at: %s", file)
+		slog.Error("Event listener MUST reside in 'internal/infrastructure/input/events/'",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("file", file),
+		)
 	}
 
 	eventType := handlerType.In(1)
@@ -93,7 +97,10 @@ func (p *defaultEventPublisher) Publish(ctx context.Context, event interface{}) 
 		if err := tx.Create(&outboxEvent).Error; err == nil {
 			outboxID = outboxEvent.ID
 		} else {
-			log.Printf("❌ [Outbox] Failed to save outbox event: %v", err)
+			slog.Error("Failed to save outbox event",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", err),
+			)
 		}
 	}
 
@@ -185,7 +192,12 @@ func StartWorkerPool(props *EventProperties) {
 	currentPool = pool
 	poolStopped = false
 
-	log.Printf("[EventBus] Starting worker pool with %d workers (Queue capacity: %d, Rejection policy: %s)", size, cap, policy)
+	slog.Info("Starting worker pool",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.Int("workers", size),
+		slog.Int("queue_capacity", cap),
+		slog.String("rejection_policy", policy),
+	)
 
 	pool.workers.Add(size)
 	for i := 0; i < size; i++ {
@@ -193,7 +205,11 @@ func StartWorkerPool(props *EventProperties) {
 			defer pool.workers.Done()
 			for task := range q {
 				if err := task.listener(task.ctx, task.event); err != nil {
-					log.Printf("⚠️ [EventBus] Error in listener for %T: %v", task.event, err)
+					slog.Warn("Error in listener",
+						slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+						slog.String("event", fmt.Sprintf("%T", task.event)),
+						slog.Any("error", err),
+					)
 					handleFailure(task.ctx, task.event, err)
 				}
 				finishListener(task.outboxID)
@@ -295,7 +311,11 @@ func (p *defaultEventPublisher) dispatchToHandler(ctx context.Context, handler E
 		// Preserve the legacy behavior when concurrency was never started.
 		go func(h EventListener, ev interface{}, oid uint) {
 			if err := h(ctx, ev); err != nil {
-				log.Printf("⚠️ [EventBus] Error in listener for %T: %v", ev, err)
+				slog.Warn("Error in listener",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.String("event", fmt.Sprintf("%T", ev)),
+					slog.Any("error", err),
+				)
 				handleFailure(ctx, ev, err)
 			}
 			finishListener(oid)
@@ -325,7 +345,10 @@ func (p *defaultEventPublisher) dispatchStoppingPool(pool *workerPool, policy st
 		pool.fallbacks.Add(1)
 		pool.mu.Unlock()
 		if os.Getenv("SPRINGO_PROFILES_ACTIVE") != "test" {
-			log.Printf("⚠️ [EventBus] Pool stopping. Falling back to temporary goroutine for %T", event)
+			slog.Warn("Pool stopping. Falling back to temporary goroutine",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event", fmt.Sprintf("%T", event)),
+			)
 		}
 		p.executeFallbackGoroutine(pool, ctx, handler, event, outboxID)
 	}
@@ -348,7 +371,10 @@ func (p *defaultEventPublisher) dispatchAcceptingPool(pool *workerPool, policy s
 		case pool.queue <- task:
 			sent = true
 		default:
-			log.Printf("⚠️ [EventBus] Queue full. Discarding event %T under discard policy", event)
+			slog.Warn("Queue full. Discarding event under discard policy",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event", fmt.Sprintf("%T", event)),
+			)
 			finishListener(outboxID)
 			atomic.AddInt64(&discardedEvents, 1)
 			sent = true // Treated as handled/discarded
@@ -372,7 +398,10 @@ func (p *defaultEventPublisher) handleUnsentTask(pool *workerPool, policy string
 		atomic.AddInt64(&discardedEvents, 1)
 	} else {
 		if os.Getenv("SPRINGO_PROFILES_ACTIVE") != "test" {
-			log.Printf("⚠️ [EventBus] Queue full. Falling back to temporary goroutine for %T", event)
+			slog.Warn("Queue full. Falling back to temporary goroutine",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event", fmt.Sprintf("%T", event)),
+			)
 		}
 		pool.mu.Lock()
 		pool.fallbacks.Add(1)
@@ -385,7 +414,11 @@ func (p *defaultEventPublisher) executeFallbackGoroutine(pool *workerPool, ctx c
 	go func(h EventListener, ev interface{}, oid uint) {
 		defer pool.fallbacks.Done()
 		if err := h(ctx, ev); err != nil {
-			log.Printf("⚠️ [EventBus] Error in listener for %T: %v", ev, err)
+			slog.Warn("Error in listener",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event", fmt.Sprintf("%T", ev)),
+				slog.Any("error", err),
+			)
 			handleFailure(ctx, ev, err)
 		}
 		finishListener(oid)
@@ -429,11 +462,19 @@ func completeOutboxEvent(outboxID uint) {
 
 	if props.Outbox.CleanUp {
 		if err := db.Delete(&OutboxEventEntity{}, outboxID).Error; err != nil {
-			log.Printf("❌ [Outbox] Failed to delete completed outbox event %d: %v", outboxID, err)
+			slog.Error("Failed to delete completed outbox event",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Uint64("outbox_id", uint64(outboxID)),
+				slog.Any("error", err),
+			)
 		}
 	} else {
 		if err := db.Model(&OutboxEventEntity{}).Where("id = ?", outboxID).Update("status", "PROCESSED").Error; err != nil {
-			log.Printf("❌ [Outbox] Failed to mark outbox event %d as PROCESSED: %v", outboxID, err)
+			slog.Error("Failed to mark outbox event as PROCESSED",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Uint64("outbox_id", uint64(outboxID)),
+				slog.Any("error", err),
+			)
 		}
 	}
 }
@@ -457,14 +498,17 @@ func StartOutboxPoller(props *EventProperties) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		log.Printf("[Outbox] Starting background poller with interval %v", interval)
+		slog.Info("Starting background poller",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Duration("interval", interval),
+		)
 
 		for {
 			select {
 			case <-ticker.C:
 				pollPendingEvents()
 			case <-outboxStopChan:
-				log.Println("[Outbox] Stopping background poller")
+				slog.Info("Stopping background poller", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 				return
 			}
 		}
@@ -496,7 +540,10 @@ func pollPendingEvents() {
 	// 2. Acquire cluster-wide poller lock
 	acquired, err := acquirePollerLock(db)
 	if err != nil {
-		log.Printf("❌ [Outbox Poller] Lock query error: %v", err)
+		slog.Error("Lock query error in outbox poller",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
 		return
 	}
 	if !acquired {
@@ -510,7 +557,10 @@ func pollPendingEvents() {
 	}
 
 	if err := claimEvents(db, pendingEvents); err != nil {
-		log.Printf("❌ [Outbox Poller] Failed to claim processing status for events: %v", err)
+		slog.Error("Failed to claim processing status for events",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
 		return
 	}
 
@@ -530,12 +580,18 @@ func fetchPendingEvents(db *gorm.DB) ([]OutboxEventEntity, error) {
 	cutoff := time.Now().Add(-5 * time.Second)
 	var pendingEvents []OutboxEventEntity
 	if err := db.Where("status = ? AND created_at < ?", "PENDING", cutoff).Limit(100).Find(&pendingEvents).Error; err != nil {
-		log.Printf("❌ [Outbox Poller] Failed to fetch pending events: %v", err)
+		slog.Error("Failed to fetch pending events",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
 		return nil, err
 	}
 
 	if len(pendingEvents) > 0 {
-		log.Printf("[Outbox Poller] Found %d pending events to process", len(pendingEvents))
+		slog.Debug("Found pending outbox events to process",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Int("count", len(pendingEvents)),
+		)
 	}
 	return pendingEvents, nil
 }
@@ -558,13 +614,20 @@ func dispatchPendingEvents(publisher *defaultEventPublisher, pendingEvents []Out
 func dispatchSinglePendingEvent(publisher *defaultEventPublisher, pe OutboxEventEntity) {
 	typ := findEventTypeByName(pe.EventName)
 	if typ == nil {
-		log.Printf("⚠️ [Outbox Poller] Unknown event type '%s', skipping", pe.EventName)
+		slog.Warn("Unknown event type in outbox poller",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("event_name", pe.EventName),
+		)
 		return
 	}
 
 	eventVal := reflect.New(typ).Interface()
 	if err := json.Unmarshal([]byte(pe.Payload), eventVal); err != nil {
-		log.Printf("❌ [Outbox Poller] Failed to unmarshal event %d payload: %v", pe.ID, err)
+		slog.Error("Failed to unmarshal event payload",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Uint64("event_id", uint64(pe.ID)),
+			slog.Any("error", err),
+		)
 		return
 	}
 
@@ -575,7 +638,11 @@ func dispatchSinglePendingEvent(publisher *defaultEventPublisher, pe OutboxEvent
 		finalEvent = reflect.ValueOf(eventVal).Elem().Interface()
 	}
 
-	log.Printf("[Outbox Poller] Redespatching outbox event %d (%s)", pe.ID, pe.EventName)
+	slog.Debug("Redespatching outbox event",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.Uint64("event_id", uint64(pe.ID)),
+		slog.String("event_name", pe.EventName),
+	)
 
 	ctx := context.Background()
 	if pe.TraceID != "" {
@@ -620,9 +687,15 @@ func handleFailure(ctx context.Context, event interface{}, err error) {
 	}
 
 	if err := db.Create(&failedEvent).Error; err != nil {
-		log.Printf("❌ [DLQ] Failed to persist failed event: %v", err)
+		slog.Error("Failed to persist failed event to DLQ",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
 	} else {
-		log.Printf("📥 [DLQ] Failed event saved to DB for retry: %s", failedEvent.EventName)
+		slog.Info("Failed event saved to DB for retry",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("event_name", failedEvent.EventName),
+		)
 	}
 }
 
@@ -670,9 +743,12 @@ func PrintEventMap() {
 		return
 	}
 
-	log.Println("📢 [SprinGo EventBus] Event Routing Map:")
 	for eventType, handlers := range listeners {
-		log.Printf("   -> %v: %d listener(s)", eventType, len(handlers))
+		slog.Debug("Event routing mapping",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("event_type", eventType.String()),
+			slog.Int("listeners", len(handlers)),
+		)
 	}
 }
 
@@ -760,7 +836,10 @@ func releasePollerLock(db *gorm.DB) {
 	if err := db.Model(&OutboxPollerLockEntity{}).
 		Where("name = ? AND locked_by = ?", lockName, pollerInstanceID).
 		Update("lock_until", now).Error; err != nil {
-		log.Printf("❌ [Outbox Poller] Failed to release lock: %v", err)
+		slog.Error("Failed to release lock",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
 	}
 }
 
@@ -807,7 +886,11 @@ func RedispatchEvent(ctx context.Context, eventName string, payload string) erro
 	var firstErr error
 	for _, handler := range handlers {
 		if err := handler(ctx, eventVal); err != nil {
-			log.Printf("⚠️ [EventBus-Redispatch] Listener error for %s: %v", eventName, err)
+			slog.Warn("Listener error in redispatch",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event_name", eventName),
+				slog.Any("error", err),
+			)
 			if firstErr == nil {
 				firstErr = err
 			}

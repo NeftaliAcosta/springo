@@ -2,9 +2,10 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"gorm.io/gorm"
 )
 
@@ -35,13 +36,16 @@ func (m *MigrationManager) rollbackUnderLock(db *gorm.DB, steps int) error {
 	}
 
 	if len(executed) == 0 {
-		log.Println("ℹ️ No migrations found to rollback.")
+		slog.Info("ℹ️ No migrations found to rollback.",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 		return nil
 	}
 
 	toRevert := m.getMigrationsToRevert(executed, steps)
 
-	log.Printf("🔄 Rolling back %d migration(s)...", len(toRevert))
+	slog.Info(fmt.Sprintf("🔄 Rolling back %d migration(s)...", len(toRevert)),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.Int("count", len(toRevert)))
 
 	return m.executeReversions(toRevert)
 }
@@ -93,7 +97,8 @@ func (m *MigrationManager) executeReversions(toRevert []MigrationRecord) error {
 		}
 	}
 
-	log.Println("✅ Rollback completed successfully.")
+	slog.Info("✅ Rollback completed successfully.",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	return nil
 }
 
@@ -107,7 +112,9 @@ func (m *MigrationManager) revertSingleMigration(record MigrationRecord, regMap 
 		return fmt.Errorf("rollback failed: migration %q does not define Down rollback logic", reg.Name)
 	}
 
-	log.Printf("  <- Reverting: %s", reg.Name)
+	slog.Info(fmt.Sprintf("  <- Reverting: %s", reg.Name),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("migration", reg.Name))
 	err := m.db.Transaction(func(tx *gorm.DB) error {
 		if err := reg.Down(tx); err != nil {
 			return err
@@ -116,7 +123,10 @@ func (m *MigrationManager) revertSingleMigration(record MigrationRecord, regMap 
 	})
 
 	if err != nil {
-		log.Printf("  ❌ Error reverting %s: %v", reg.Name, err)
+		slog.Error(fmt.Sprintf("  ❌ Error reverting %s", reg.Name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("migration", reg.Name),
+			slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -172,13 +182,15 @@ func (m *MigrationManager) Refresh() error {
 		return err
 	}
 	if len(executed) > 0 {
-		log.Println("🔄 Resetting all database migrations...")
+		slog.Info("🔄 Resetting all database migrations...",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 		if err := m.rollbackUnderLock(db, len(executed)); err != nil {
 			return fmt.Errorf("refresh reset failed: %w", err)
 		}
 	}
 
-	log.Println("🚀 Re-running all database migrations...")
+	slog.Info("🚀 Re-running all database migrations...",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	executedMap, err := m.getExecutedMigrationsMap(db)
 	if err != nil {
 		return err

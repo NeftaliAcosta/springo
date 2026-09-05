@@ -2,10 +2,13 @@ package cache
 
 import (
 	"context"
-	"github.com/NeftaliAcosta/springo/framework/config"
-	"log"
+	"fmt"
+	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 )
 
 var (
@@ -72,10 +75,13 @@ func GetCache(name string) Cache {
 
 	if !ok {
 		if cacheType == "redis" {
-			log.Printf("❌ [Cache] Redis provider not found. Did you import 'github.com/NeftaliAcosta/springo/framework/cache/redis'? ")
-			log.Printf("👉 Run: go get github.com/redis/go-redis/v9 && go mod tidy")
+			slog.Error("❌ [Cache] Redis provider not found. Did you import 'github.com/NeftaliAcosta/springo/framework/cache/redis'? 👉 Run: go get github.com/redis/go-redis/v9 && go mod tidy",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("provider", cacheType))
 		} else {
-			log.Printf("⚠️ [Cache] Provider '%s' not found, falling back to 'memory'", cacheType)
+			slog.Warn(fmt.Sprintf("⚠️ [Cache] Provider '%s' not found, falling back to 'memory'", cacheType),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("provider", cacheType))
 		}
 
 		// Fallback to memory

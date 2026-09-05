@@ -13,7 +13,7 @@ import (
 	"github.com/NeftaliAcosta/springo/framework/scheduler"
 	"github.com/NeftaliAcosta/springo/framework/web"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -154,7 +154,14 @@ func parseOptions(opts []Options) Options {
 }
 
 func showBanner(disableBanner bool) {
-	if !disableBanner && os.Getenv("SPRINGO_BANNER_MODE") != "off" && os.Getenv("SPRINGO_PROFILES_ACTIVE") != "test" {
+	if disableBanner {
+		return
+	}
+	loggingProps := config.Get[logging.LoggingProperties]()
+	if loggingProps != nil && !loggingProps.IsBannerEnabled() {
+		return
+	}
+	if os.Getenv("SPRINGO_BANNER_MODE") != "off" && os.Getenv("SPRINGO_PROFILES_ACTIVE") != "test" {
 		web.ShowBanner()
 	}
 }
@@ -194,7 +201,11 @@ func initI18n(configDir string) {
 	}
 	messageSource := web.NewMessageSource(defaultLocale)
 	if err := messageSource.LoadTranslations(path); err != nil {
-		log.Printf("⚠️ [MessageSource] Failed to load translations from %s: %v", path, err)
+		slog.Warn("Failed to load translations",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("path", path),
+			slog.Any("error", err),
+		)
 	}
 	ioc.GetContainer().RegisterBean("messageSource", messageSource)
 }
@@ -257,16 +268,26 @@ func initEventBus(dbConn *gorm.DB, cleanups *[]func()) {
 	if eventProps != nil && eventProps.Enabled {
 		if eventProps.DLQ.Enabled {
 			if err := dbConn.AutoMigrate(&event.FailedEventEntity{}); err != nil {
-				log.Printf("⚠️ [EventBus] Failed to run DLQ migrations: %v", err)
+				slog.Warn("Failed to run DLQ migrations",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.Any("error", err),
+				)
 			} else {
-				log.Println("✅ [EventBus] DLQ Infrastructure ready (springo_failed_events)")
+				slog.Info("DLQ Infrastructure ready (springo_failed_events)",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				)
 			}
 		}
 		if eventProps.Outbox.Enabled {
 			if err := dbConn.AutoMigrate(&event.OutboxEventEntity{}); err != nil {
-				log.Printf("⚠️ [EventBus] Failed to run Outbox migrations: %v", err)
+				slog.Warn("Failed to run Outbox migrations",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.Any("error", err),
+				)
 			} else {
-				log.Println("✅ [EventBus] Outbox Infrastructure ready (springo_outbox)")
+				slog.Info("Outbox Infrastructure ready (springo_outbox)",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				)
 			}
 		}
 		event.PrintEventMap()
@@ -289,9 +310,14 @@ func initScheduler(dbConn *gorm.DB) {
 		}
 		if hasLock {
 			if err := dbConn.AutoMigrate(&scheduler.ShedLockEntity{}); err != nil {
-				log.Printf("⚠️ [Scheduler] Failed to run ShedLock migrations: %v", err)
+				slog.Warn("Failed to run ShedLock migrations",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.Any("error", err),
+				)
 			} else {
-				log.Println("✅ [Scheduler] ShedLock Infrastructure ready (springo_shedlock)")
+				slog.Info("ShedLock Infrastructure ready (springo_shedlock)",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				)
 			}
 		}
 	}
@@ -317,7 +343,10 @@ func initSingleDataSource(name string, props database.DataSourceProperties, debu
 		return fmt.Errorf("additional database connection failed (%s: %s): %w", name, props.Driver, err)
 	}
 	ioc.GetContainer().RegisterBean(name, conn)
-	log.Printf("🔌 Connected to additional datasource: %s", name)
+	slog.Info("Connected to additional datasource",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("name", name),
+	)
 
 	*cleanups = append(*cleanups, func() {
 		if sqlDB, err := conn.DB(); err == nil && sqlDB != nil {
@@ -338,7 +367,11 @@ func initSingleDataSource(name string, props database.DataSourceProperties, debu
 func Bootstrap(opts ...Options) *Application {
 	app, err := BootstrapE(opts...)
 	if err != nil {
-		log.Fatalf("Bootstrap failed: %v", err)
+		slog.Error("Bootstrap failed",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
+		os.Exit(1)
 	}
 	return app
 }
@@ -348,7 +381,11 @@ func (a *Application) Start() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := a.runAndShutdown(ctx); err != nil {
-		log.Fatal("Server startup failed: ", err)
+		slog.Error("Server startup failed",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err),
+		)
+		os.Exit(1)
 	}
 }
 
@@ -416,7 +453,10 @@ func (a *Application) Run(ctx context.Context) error {
 		}
 	}()
 
-	log.Printf("🚀 SprinGo Server running on http://localhost%s", server.Addr)
+	slog.Info("SprinGo Server running",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("url", "http://localhost"+server.Addr),
+	)
 
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		return err
@@ -447,7 +487,7 @@ func (a *Application) Shutdown(ctx context.Context) error {
 }
 
 func (a *Application) doShutdown(ctx context.Context) error {
-	log.Println("🛑 Shutting down SprinGo application context...")
+	slog.Info("Shutting down SprinGo application context", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	var errs []error
 
 	a.mu.Lock()
@@ -458,11 +498,11 @@ func (a *Application) doShutdown(ctx context.Context) error {
 	a.shutdownHTTPServer(ctx, srv)
 
 	// 2. Stop scheduler background tasks
-	log.Println("⏰ Stopping background scheduler...")
+	slog.Info("Stopping background scheduler", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	scheduler.StopBackgroundJobs()
 
 	// 3. Stop event bus worker pool
-	log.Println("📦 Stopping event bus worker pool...")
+	slog.Info("Stopping event bus worker pool", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	event.StopWorkerPool()
 
 	// 4. Execute application shutdown hooks in reverse order
@@ -471,7 +511,7 @@ func (a *Application) doShutdown(ctx context.Context) error {
 	}
 
 	// 5. Close telemetry
-	log.Println("📊 Closing telemetry...")
+	slog.Info("Closing telemetry", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	web.CloseTelemetry()
 
 	// 6. Close additional datasources and io.Closer beans
@@ -483,22 +523,25 @@ func (a *Application) doShutdown(ctx context.Context) error {
 	}
 
 	// 8. Clear IoC Container global instances
-	log.Println("🧹 Clearing IoC container...")
+	slog.Info("Clearing IoC container", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	ioc.GetContainer().Clear()
 
 	if len(errs) > 0 {
 		return fmt.Errorf("graceful shutdown completed with errors: %v", errs)
 	}
 
-	log.Println("✅ SprinGo application context shutdown complete.")
+	slog.Info("SprinGo application context shutdown complete", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	return nil
 }
 
 func (a *Application) shutdownHTTPServer(ctx context.Context, srv *http.Server) {
 	if srv != nil {
-		log.Println("🔌 Stopping HTTP server...")
+		slog.Info("Stopping HTTP server", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("⚠️ HTTP server graceful shutdown timed out, forcing close: %v", err)
+			slog.Warn("HTTP server graceful shutdown timed out, forcing close",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", err),
+			)
 			_ = srv.Close()
 		}
 	}
@@ -506,7 +549,7 @@ func (a *Application) shutdownHTTPServer(ctx context.Context, srv *http.Server) 
 
 func (a *Application) closeAdditionalBeans() []error {
 	var errs []error
-	log.Println("🔌 Closing additional beans and resources...")
+	slog.Info("Closing additional beans and resources", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	beans := ioc.GetContainer().GetAllBeans()
 	for name, bean := range beans {
 		if err := a.closeBean(name, bean); err != nil {
@@ -520,14 +563,20 @@ func (a *Application) closeBean(name string, bean any) error {
 	if db, ok := bean.(*gorm.DB); ok {
 		if db != a.DB {
 			if sqlDB, err := db.DB(); err == nil && sqlDB != nil {
-				log.Printf("🔌 Closing datasource bean: %s", name)
+				slog.Info("Closing datasource bean",
+					slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+					slog.String("name", name),
+				)
 				if err := sqlDB.Close(); err != nil {
 					return fmt.Errorf("error closing additional database %s: %w", name, err)
 				}
 			}
 		}
 	} else if closer, ok := bean.(io.Closer); ok {
-		log.Printf("🔌 Closing bean: %s", name)
+		slog.Info("Closing bean",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("name", name),
+		)
 		if err := closer.Close(); err != nil {
 			return fmt.Errorf("error closing bean %s: %w", name, err)
 		}
@@ -536,7 +585,7 @@ func (a *Application) closeBean(name string, bean any) error {
 }
 
 func (a *Application) closePrimaryDB() error {
-	log.Println("🔌 Closing database connections...")
+	slog.Info("Closing database connections", slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	if a.DB != nil {
 		if sqlDB, err := a.DB.DB(); err == nil {
 			if err := sqlDB.Close(); err != nil {
@@ -546,3 +595,4 @@ func (a *Application) closePrimaryDB() error {
 	}
 	return nil
 }
+

@@ -3,12 +3,13 @@ package security
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 
 	"github.com/go-ldap/ldap/v3"
 )
@@ -125,14 +126,19 @@ func (p *LdapAuthenticationProvider) dialLDAP(rawUrl, scheme string) (*ldap.Conn
 				_ = conn.Close()
 				return nil, fmt.Errorf("LDAP connection requires secure StartTLS, but TLS handshake failed: %w", startTLSErr)
 			}
-			log.Printf("⚠️ WARNING: LDAP StartTLS failed (%v). Falling back to INSECURE plaintext transmission on %s!", startTLSErr, rawUrl)
+			slog.Warn(fmt.Sprintf("⚠️ WARNING: LDAP StartTLS failed (%v). Falling back to INSECURE plaintext transmission on %s!", startTLSErr, rawUrl),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("url", rawUrl),
+				slog.Any("error", startTLSErr))
 		}
 	} else {
 		if requireTLS {
 			_ = conn.Close()
 			return nil, fmt.Errorf("LDAP connection requires secure TLS in production, but StartTLS is disabled and URL is not secure (ldaps://)")
 		}
-		log.Printf("⚠️ WARNING: LDAP connection is using INSECURE plaintext transmission on %s (StartTLS is disabled)!", rawUrl)
+		slog.Warn(fmt.Sprintf("⚠️ WARNING: LDAP connection is using INSECURE plaintext transmission on %s (StartTLS is disabled)!", rawUrl),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("url", rawUrl))
 	}
 
 	return conn, nil

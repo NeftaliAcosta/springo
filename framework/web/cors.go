@@ -2,12 +2,14 @@ package web
 
 import (
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 )
 
 // CorsProperties defines the CORS configuration in application.yaml
@@ -41,7 +43,9 @@ func validateAndPrepareConfig(props *CorsProperties) {
 
 		if err := validateCredentialsOrigin(props); err != nil {
 			configError = err
-			log.Printf("❌ [CORS ERROR] %v", configError)
+			slog.Error(fmt.Sprintf("❌ [CORS ERROR] %v", configError),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", configError))
 			return
 		}
 
@@ -72,7 +76,10 @@ func compileOriginPatterns(patterns []string) {
 
 		re, err := regexp.Compile(regexStr)
 		if err != nil {
-			log.Printf("⚠️ [CORS] Invalid origin pattern ignored: %s", pattern)
+			slog.Warn(fmt.Sprintf("⚠️ [CORS] Invalid origin pattern ignored: %s", pattern),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("pattern", pattern),
+				slog.Any("error", err))
 			continue
 		}
 		patternCache = append(patternCache, re)

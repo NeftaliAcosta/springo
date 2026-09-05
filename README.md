@@ -382,7 +382,7 @@ Explore our comprehensive library of step-by-step guides from zero to production
 - 📊 **[Custom Health Indicators & Telemetry](docs/tutorials/24_custom_actuator_health_and_telemetry.md)**:
   `web.RegisterHealthCheck`, external ping health indicators, and Kubernetes probe privacy.
 - 📝 **[Structured Logging & Distributed Tracing](docs/tutorials/15_structured_logging_and_tracing.md)**:
-  `log/slog` structured logging, context propagation (`request_id`, `trace_id`), and JSON formats.
+  `log/slog` structured logging, granular `framework-level` filtering, banner toggle, and trace context propagation.
 - 🧪 **[Unit & Integration Testing Guide](docs/tutorials/16_integration_and_unit_testing.md)**:
   `SprinGoTestContext`, fluent HTTP client, automatic DB rollback, and bean mocking.
 

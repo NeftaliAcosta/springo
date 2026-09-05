@@ -2,11 +2,12 @@ package event
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"github.com/NeftaliAcosta/springo/framework/web"
 
 	"gorm.io/gorm"
@@ -64,8 +65,14 @@ func (m *RetryManager) updateRetryState(db *gorm.DB, p *defaultEventPublisher, f
 	fe.NextRetryAt = CalculateNextRetry(fe.Retries, props)
 	_ = db.Save(&fe).Error
 
-	log.Printf("🔄 [EventBus-Retry] Attempting recovery for %s (ID: %d, Attempt %d/%d). Next if fails: %v",
-		fe.EventName, fe.ID, fe.Retries, props.DLQ.MaxRetries, fe.NextRetryAt.Format("15:04:05"))
+	slog.Info("Attempting recovery for event",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("event_name", fe.EventName),
+		slog.Uint64("event_id", uint64(fe.ID)),
+		slog.Int("attempt", fe.Retries),
+		slog.Int("max_retries", props.DLQ.MaxRetries),
+		slog.String("next_retry", fe.NextRetryAt.Format("15:04:05")),
+	)
 
 	ctx := context.Background()
 	if fe.TraceID != "" {
@@ -73,18 +80,31 @@ func (m *RetryManager) updateRetryState(db *gorm.DB, p *defaultEventPublisher, f
 	}
 
 	if err := RedispatchEvent(ctx, fe.EventName, fe.Payload); err != nil {
-		log.Printf("❌ [EventBus-Retry] Recovery attempt failed for event ID %d: %v", fe.ID, err)
+		slog.Warn("Recovery attempt failed for event",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Uint64("event_id", uint64(fe.ID)),
+			slog.Any("error", err),
+		)
 		if fe.Retries >= props.DLQ.MaxRetries {
 			fe.Status = "FAILED"
 			fe.Error = err.Error()
-			log.Printf("❌ [EventBus-Retry] Event %s (ID: %d) reached MAX retries and is definitively FAILED", fe.EventName, fe.ID)
+			slog.Error("Event reached MAX retries and is definitively FAILED",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("event_name", fe.EventName),
+				slog.Uint64("event_id", uint64(fe.ID)),
+			)
 		} else {
 			fe.Status = "FAILED"
 			fe.Error = err.Error()
 		}
 		_ = db.Save(&fe).Error
 	} else {
-		log.Printf("✅ [EventBus-Retry] Event %s (ID: %d) successfully recovered and removed from DLQ", fe.EventName, fe.ID)
+		slog.Info("Event successfully recovered and removed from DLQ",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("event_name", fe.EventName),
+			slog.Uint64("event_id", uint64(fe.ID)),
+		)
 		_ = db.Delete(&FailedEventEntity{}, fe.ID).Error
 	}
 }
+

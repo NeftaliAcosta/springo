@@ -3,11 +3,12 @@ package redis
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/NeftaliAcosta/springo/framework/cache"
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -48,14 +49,21 @@ func getClient() *goredis.Client {
 		Password: props.Password,
 		DB:       props.DB,
 	})
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		log.Printf("⚠️ [Cache] Failed to connect to Redis: %v", err)
+		slog.Warn(fmt.Sprintf("⚠️ [Cache] Failed to connect to Redis: %v", err),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("host", props.Host),
+			slog.Int("port", props.Port),
+			slog.Any("error", err))
 	} else {
-		log.Printf("✅ [Cache] Connected to Redis at %s:%d", props.Host, props.Port)
+		slog.Info(fmt.Sprintf("✅ [Cache] Connected to Redis at %s:%d", props.Host, props.Port),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("host", props.Host),
+			slog.Int("port", props.Port))
 	}
 	return client
 }

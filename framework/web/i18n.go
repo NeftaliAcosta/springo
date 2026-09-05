@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 
 	"gopkg.in/yaml.v3"
 )
@@ -103,7 +104,12 @@ func (ms *MessageSource) LoadTranslations(dir string) error {
 			ms.translations[locale][k] = v
 		}
 
-		log.Printf("ℹ️ [MessageSource] Loaded %d translations for locale: %s (%s)", len(flattened), locale, filename)
+		slog.Info(fmt.Sprintf("ℹ️ [MessageSource] Loaded %d translations for locale: %s (%s)",
+			len(flattened), locale, filename),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("locale", locale),
+			slog.String("file", filename),
+			slog.Int("count", len(flattened)))
 		return nil
 	})
 }

@@ -2,12 +2,13 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"gorm.io/gorm"
 )
 
@@ -172,7 +173,11 @@ func (m *MigrationManager) applyBaselineIfRequired(db *gorm.DB, executedMap *map
 		return nil
 	}
 
-	log.Printf("ℹ️ [Migrator] Applying baseline up to version %q (%d migrations)", baselineVer, len(baselineMigrations))
+	slog.Info(fmt.Sprintf("ℹ️ [Migrator] Applying baseline up to version %q (%d migrations)",
+		baselineVer, len(baselineMigrations)),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("version", baselineVer),
+		slog.Int("count", len(baselineMigrations)))
 	err := db.Transaction(func(tx *gorm.DB) error {
 		for _, b := range baselineMigrations {
 			record := MigrationRecord{
@@ -241,9 +246,14 @@ func (m *MigrationManager) getNextBatch(db *gorm.DB) int {
 }
 
 func (m *MigrationManager) executePendingMigrations(pending []Migration, nextBatch int) error {
-	log.Printf("🚀 Running migrations for batch %d...", nextBatch)
+	slog.Info(fmt.Sprintf("🚀 Running migrations for batch %d...", nextBatch),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.Int("batch", nextBatch),
+		slog.Int("count", len(pending)))
 	for _, p := range pending {
-		log.Printf("  -> Migrating: %s", p.Name)
+		slog.Info(fmt.Sprintf("  -> Migrating: %s", p.Name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("migration", p.Name))
 		checksum := computeChecksum(p)
 		err := m.db.Transaction(func(tx *gorm.DB) error {
 			if err := p.Up(tx); err != nil {
@@ -258,7 +268,10 @@ func (m *MigrationManager) executePendingMigrations(pending []Migration, nextBat
 		})
 
 		if err != nil {
-			log.Printf("  ❌ Error migrating %s: %v", p.Name, err)
+			slog.Error(fmt.Sprintf("  ❌ Error migrating %s", p.Name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("migration", p.Name),
+				slog.Any("error", err))
 			return err
 		}
 	}
@@ -312,7 +325,8 @@ func (m *MigrationManager) Migrate() error {
 		return err
 	}
 
-	log.Printf("✅ Database migrations completed successfully.")
+	slog.Info("✅ Database migrations completed successfully.",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	return nil
 }
 

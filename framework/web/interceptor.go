@@ -2,10 +2,12 @@ package web
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/NeftaliAcosta/springo/framework/logging"
 )
 
 // HandlerInterceptor defines the contract for Spring-like request interception.
@@ -213,7 +215,9 @@ func runPreHandle(matched []*InterceptorRegistration, w http.ResponseWriter, r *
 func runPostHandle(matched []*InterceptorRegistration, lastExecutedIndex int, w http.ResponseWriter, r *http.Request) {
 	for i := lastExecutedIndex; i >= 0; i-- {
 		if err := matched[i].interceptor.PostHandle(w, r); err != nil {
-			log.Printf("web: error executing PostHandle for interceptor: %v", err)
+			slog.Error("web: error executing PostHandle for interceptor",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", err))
 		}
 	}
 	triggerAfterCompletion(matched, lastExecutedIndex, w, r, nil)

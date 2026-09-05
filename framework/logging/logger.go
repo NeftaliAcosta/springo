@@ -9,9 +9,10 @@ import (
 
 // TraceIDKey must match the one defined in framework/web/tracing.go
 var (
-	TraceIDKey   = "springo_trace_id"
-	SpanIDKey    = "springo_span_id"
-	currentLevel = &slog.LevelVar{}
+	TraceIDKey        = "springo_trace_id"
+	SpanIDKey         = "springo_span_id"
+	currentLevel      = &slog.LevelVar{}
+	frameworkLevelVar = &slog.LevelVar{}
 )
 
 // ContextHandler is a custom slog handler that automatically adds trace_id and span_id from context
@@ -19,6 +20,7 @@ type ContextHandler struct {
 	slog.Handler
 }
 
+// Handle appends trace_id and span_id from context if present.
 func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	if ctx != nil {
 		if traceID, ok := ctx.Value(TraceIDKey).(string); ok {
@@ -31,50 +33,64 @@ func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.Handler.Handle(ctx, r)
 }
 
-// Initialize setups the global slog logger based on properties
+// Initialize setups the global slog logger based on properties.
 func Initialize(props *LoggingProperties) {
 	if props == nil {
-		props = &LoggingProperties{Level: "INFO", Format: "text"}
+		props = &LoggingProperties{Level: "INFO", FrameworkLevel: "INFO", Format: "text"}
 	}
 
-	var handler slog.Handler
-	level := props.GetSlogLevel()
-	currentLevel.Set(level)
+	appLvl := props.GetSlogLevel()
+	currentLevel.Set(appLvl)
+
+	fwLvl := props.GetFrameworkSlogLevel()
+	frameworkLevelVar.Set(fwLvl)
 
 	opts := &slog.HandlerOptions{
-		Level: currentLevel,
+		Level: slog.LevelDebug, // Base handler accepts all; SubsystemFilterHandler filters dynamically
 	}
 
+	var baseHandler slog.Handler
 	if strings.ToLower(props.Format) == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+		baseHandler = slog.NewJSONHandler(os.Stdout, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		baseHandler = slog.NewTextHandler(os.Stdout, opts)
 	}
 
-	// Wrap with our ContextHandler to support tracing
-	logger := slog.New(&ContextHandler{Handler: handler})
+	// 1. Wrap with SubsystemFilterHandler to support granular app vs framework levels
+	filterHandler := NewSubsystemFilterHandler(baseHandler, currentLevel, frameworkLevelVar)
+
+	// 2. Wrap with ContextHandler to support tracing (trace_id, span_id)
+	logger := slog.New(&ContextHandler{Handler: filterHandler})
 	slog.SetDefault(logger)
 }
 
-// SetLevel changes the active logging level dynamically
+// SetLevel changes the active application logging level dynamically.
 func SetLevel(levelStr string) {
-	var lvl slog.Level
-	switch strings.ToUpper(levelStr) {
-	case "DEBUG":
-		lvl = slog.LevelDebug
-	case "WARN":
-		lvl = slog.LevelWarn
-	case "ERROR":
-		lvl = slog.LevelError
-	default:
-		lvl = slog.LevelInfo
-	}
+	lvl := ParseLevel(levelStr, slog.LevelInfo)
 	currentLevel.Set(lvl)
 }
 
-// GetLevel returns the string representation of the active logging level
+// SetFrameworkLevel changes the active framework logging level dynamically.
+func SetFrameworkLevel(levelStr string) {
+	if strings.ToUpper(strings.TrimSpace(levelStr)) == "OFF" {
+		frameworkLevelVar.Set(LevelOff)
+		return
+	}
+	lvl := ParseLevel(levelStr, slog.LevelInfo)
+	frameworkLevelVar.Set(lvl)
+}
+
+// GetLevel returns the string representation of the active logging level.
 func GetLevel() string {
 	return currentLevel.Level().String()
+}
+
+// GetFrameworkLevel returns the string representation of the active framework logging level.
+func GetFrameworkLevel() string {
+	if frameworkLevelVar.Level() == LevelOff {
+		return "OFF"
+	}
+	return frameworkLevelVar.Level().String()
 }
 
 // Global Logger Accessors (Convenience)

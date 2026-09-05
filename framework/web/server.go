@@ -2,14 +2,15 @@ package web
 
 import (
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -160,7 +161,10 @@ func BuildServer(startPort int, r chi.Router) (*http.Server, net.Listener, error
 		if err == nil {
 			break
 		}
-		log.Printf("⚠️  Port %d occupied, trying %d...", port, port+1)
+		slog.Warn(fmt.Sprintf("⚠️  Port %d occupied, trying %d...", port, port+1),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Int("occupiedPort", port),
+			slog.Int("nextPort", port+1))
 		port++
 		if port > startPort+100 {
 			return nil, nil, fmt.Errorf("could not find an available port in range %d-%d", startPort, startPort+100)
@@ -195,6 +199,8 @@ func StartServerWithDynamicPort(startPort int, r chi.Router) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("🚀 SprinGo Server running on http://localhost%s", server.Addr)
+	slog.Info(fmt.Sprintf("🚀 SprinGo Server running on http://localhost%s", server.Addr),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("addr", server.Addr))
 	return server.Serve(ln)
 }

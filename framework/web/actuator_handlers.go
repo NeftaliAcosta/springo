@@ -3,7 +3,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"reflect"
 	"runtime/pprof"
@@ -334,19 +334,27 @@ func executeDlqRetry(w http.ResponseWriter, r *http.Request, db *gorm.DB, id str
 		return
 	}
 
-	log.Printf("🔄 [Actuator-DLQ] Manual retry triggered for event ID %s (%s)", id, row.EventName)
+	slog.Info(fmt.Sprintf("🔄 [Actuator-DLQ] Manual retry triggered for event ID %s (%s)", id, row.EventName),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("eventId", id),
+		slog.String("eventName", row.EventName))
 	_ = db.Exec("UPDATE springo_failed_events SET retries = retries + 1, status = 'RETRYING', "+
 		"updated_at = ? WHERE id = ?", time.Now(), id)
 
 	if err := callback(r.Context(), row.EventName, row.Payload); err != nil {
-		log.Printf("❌ [Actuator-DLQ] Manual retry failed for event ID %s: %v", id, err)
+		slog.Error(fmt.Sprintf("❌ [Actuator-DLQ] Manual retry failed for event ID %s", id),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("eventId", id),
+			slog.Any("error", err))
 		_ = db.Exec("UPDATE springo_failed_events SET status = 'FAILED', error = ? WHERE id = ?", err.Error(), id)
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
-	log.Printf("✅ [Actuator-DLQ] Event ID %s successfully re-dispatched and cleared from DLQ", id)
+	slog.Info(fmt.Sprintf("✅ [Actuator-DLQ] Event ID %s successfully re-dispatched and cleared from DLQ", id),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("eventId", id))
 	_ = db.Exec("DELETE FROM springo_failed_events WHERE id = ?", id)
 	w.WriteHeader(http.StatusOK)
 }

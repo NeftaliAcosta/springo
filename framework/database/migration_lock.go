@@ -7,11 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"gorm.io/gorm"
 )
 
@@ -54,9 +55,11 @@ func (m *MigrationManager) waitForLock(db *gorm.DB, lockedBy string) error {
 		if acquired {
 			return nil
 		}
-		log.Printf(
-			"⏳ [Migrator] Database migration lock is currently held by another instance. Retrying in %v...",
-			pollInterval,
+		slog.Info(
+			fmt.Sprintf("⏳ [Migrator] Database migration lock is currently held by another instance. Retrying in %v...",
+				pollInterval),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Duration("retryInterval", pollInterval),
 		)
 		time.Sleep(pollInterval)
 	}
@@ -99,7 +102,9 @@ func (m *MigrationManager) startHeartbeat(db *gorm.DB, lockedBy string) (stop fu
 		cancel()
 		wg.Wait()
 		if err := m.releaseLock(db, lockedBy); err != nil {
-			log.Printf("⚠️ [Migrator] Failed to release database migration lock: %v", err)
+			slog.Warn(fmt.Sprintf("⚠️ [Migrator] Failed to release database migration lock: %v", err),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", err))
 		}
 	}
 }
@@ -164,7 +169,11 @@ func (m *MigrationManager) acquireLock(db *gorm.DB, lockedBy string) (bool, erro
 	}
 
 	if lock.Locked && now.Sub(lock.LockedAt) > timeout {
-		log.Printf("⚠️ [Migrator] Breaking stale migration lock held by %s since %v", lock.LockedBy, lock.LockedAt)
+		slog.Warn(fmt.Sprintf("⚠️ [Migrator] Breaking stale migration lock held by %s since %v",
+			lock.LockedBy, lock.LockedAt),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("lockedBy", lock.LockedBy),
+			slog.Time("lockedAt", lock.LockedAt))
 		res = db.Model(&MigrationLock{}).
 			Where("lock_key = ? AND locked = ? AND locked_at = ?", "migration_lock", true, lock.LockedAt).
 			Updates(map[string]interface{}{
@@ -199,6 +208,8 @@ func (m *MigrationManager) refreshLock(db *gorm.DB, lockedBy string) {
 		Where("lock_key = ? AND locked_by = ? AND locked = ?", "migration_lock", lockedBy, true).
 		Update("locked_at", time.Now()).Error
 	if err != nil {
-		log.Printf("⚠️ [Migrator] Failed to refresh migration lock heartbeat: %v", err)
+		slog.Warn(fmt.Sprintf("⚠️ [Migrator] Failed to refresh migration lock heartbeat: %v", err),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err))
 	}
 }

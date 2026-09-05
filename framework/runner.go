@@ -1,9 +1,12 @@
 package framework
 
 import (
-	"github.com/NeftaliAcosta/springo/framework/ioc"
-	"log"
+	"fmt"
+	"log/slog"
 	"sort"
+
+	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 )
 
 // CommandLineRunner allows executing custom logic after the application starts.
@@ -56,15 +59,24 @@ func (a *Application) RunCommandLineRunners(args []string) {
 		return orderI < orderJ
 	})
 
-	log.Printf("🚀 [CommandLineRunner] Found %d runner(s) in container. Starting execution...", len(runners))
+	slog.Info(fmt.Sprintf("🚀 [CommandLineRunner] Found %d runner(s) in container. Starting execution...", len(runners)),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.Int("count", len(runners)))
 
 	for _, runner := range runners {
 		name := runnerNames[runner]
-		log.Printf("⏳ [CommandLineRunner] Executing: %s", name)
+		slog.Info(fmt.Sprintf("⏳ [CommandLineRunner] Executing: %s", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("runner", name))
 		if err := runner.Run(args); err != nil {
-			log.Printf("❌ [CommandLineRunner] Error executing runner %s: %v", name, err)
+			slog.Error(fmt.Sprintf("❌ [CommandLineRunner] Error executing runner %s", name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("runner", name),
+				slog.Any("error", err))
 		} else {
-			log.Printf("✅ [CommandLineRunner] Runner %s executed successfully", name)
+			slog.Info(fmt.Sprintf("✅ [CommandLineRunner] Runner %s executed successfully", name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("runner", name))
 		}
 	}
 }

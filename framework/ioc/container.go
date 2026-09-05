@@ -303,6 +303,9 @@ func (c *ApplicationContainer) resolveRequestBean(ctx context.Context, def *Bean
 
 // Instantiate creates a new instance of a bean by invoking its factory function and running autowire.
 func (c *ApplicationContainer) instantiate(ctx context.Context, def *BeanDefinition) (interface{}, error) {
+	if def.Factory == nil {
+		return nil, fmt.Errorf("bean '%s' has no factory registered", def.Name)
+	}
 	factoryVal := reflect.ValueOf(def.Factory)
 	factoryType := factoryVal.Type()
 

@@ -3,14 +3,15 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"github.com/NeftaliAcosta/springo/framework/config"
-	"github.com/NeftaliAcosta/springo/framework/ioc"
-	"log"
+	"log/slog"
 	"os"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/ioc"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
@@ -98,15 +99,23 @@ func RunStartupTasksE() error {
 
 	sortStartupJobs(startupJobs)
 
-	log.Println("[SprinGo Scheduler] 🚀 Executing critical startup sequence...")
+	slog.Info("[SprinGo Scheduler] 🚀 Executing critical startup sequence...",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 	for _, job := range startupJobs {
-		log.Printf("[SprinGo Scheduler] -> Running startup task: %s (Priority: %d)", job.name, job.conf.Priority)
+		slog.Info(fmt.Sprintf("[SprinGo Scheduler] -> Running startup task: %s (Priority: %d)",
+			job.name, job.conf.Priority),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", job.name),
+			slog.Int("priority", job.conf.Priority))
 		err := executeJobByConfig(job)
 		if err != nil {
 			if job.conf.Critical {
 				return fmt.Errorf("critical startup task failed: %s - %w", job.name, err)
 			}
-			log.Printf("[SprinGo Scheduler] ❌ Non-critical startup task failed: %s - %v", job.name, err)
+			slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Non-critical startup task failed: %s", job.name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("job", job.name),
+				slog.Any("error", err))
 		}
 	}
 	return nil
@@ -115,7 +124,10 @@ func RunStartupTasksE() error {
 // RunStartupTasks executes jobs marked as run-on-startup sequentially by priority.
 func RunStartupTasks() {
 	if err := RunStartupTasksE(); err != nil {
-		log.Fatal(err)
+		slog.Error("[SprinGo Scheduler] Fatal error executing startup tasks",
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.Any("error", err))
+		os.Exit(1)
 	}
 }
 
@@ -186,7 +198,8 @@ func StartBackgroundJobs() {
 	}
 
 	cronManager.Start()
-	log.Println("[SprinGo Scheduler] ✅ Background jobs engine active")
+	slog.Info("[SprinGo Scheduler] ✅ Background jobs engine active",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 }
 
 func startSingleBackgroundJob(name string, conf JobConf) {
@@ -196,7 +209,9 @@ func startSingleBackgroundJob(name string, conf JobConf) {
 
 	task, exists := registeredTasks[name]
 	if !exists {
-		log.Printf("[SprinGo Scheduler] ⚠️  Warning: Job '%s' configured in YAML but not registered in code", name)
+		slog.Warn(fmt.Sprintf("[SprinGo Scheduler] ⚠️  Warning: Job '%s' configured in YAML but not registered in code", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name))
 		return
 	}
 
@@ -228,16 +243,25 @@ func scheduleCron(name, spec string, fn JobFunc) {
 		_ = executeWithRecover(name, fn)
 	})
 	if err != nil {
-		log.Printf("[SprinGo Scheduler] ❌ Error scheduling cron job '%s': %v", name, err)
+		slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Error scheduling cron job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Any("error", err))
 	} else {
-		log.Printf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with cron: %s", name, spec)
+		slog.Info(fmt.Sprintf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with cron: %s", name, spec),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.String("cron", spec))
 	}
 }
 
 func scheduleFixedRate(name, durationStr string, fn JobFunc) {
 	d, err := time.ParseDuration(durationStr)
 	if err != nil {
-		log.Printf("[SprinGo Scheduler] ❌ Invalid duration for fixed-rate job '%s': %v", name, err)
+		slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Invalid duration for fixed-rate job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Any("error", err))
 		return
 	}
 
@@ -246,7 +270,10 @@ func scheduleFixedRate(name, durationStr string, fn JobFunc) {
 		defer schedulerWg.Done()
 		runFixedRateLoop(name, d, fn, schedulerStopChan)
 	}()
-	log.Printf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with fixed-rate: %s", name, durationStr)
+	slog.Info(fmt.Sprintf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with fixed-rate: %s", name, durationStr),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("job", name),
+		slog.String("duration", durationStr))
 }
 
 func runFixedRateLoop(name string, d time.Duration, fn JobFunc, stopChan chan struct{}) {
@@ -257,7 +284,9 @@ func runFixedRateLoop(name string, d time.Duration, fn JobFunc, stopChan chan st
 		case <-ticker.C:
 			_ = executeWithRecover(name, fn)
 		case <-stopChan:
-			log.Printf("[SprinGo Scheduler] Stopping fixed-rate loop for job '%s'", name)
+			slog.Info(fmt.Sprintf("[SprinGo Scheduler] Stopping fixed-rate loop for job '%s'", name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("job", name))
 			return
 		}
 	}
@@ -266,7 +295,10 @@ func runFixedRateLoop(name string, d time.Duration, fn JobFunc, stopChan chan st
 func scheduleFixedDelay(name, durationStr string, fn JobFunc) {
 	d, err := time.ParseDuration(durationStr)
 	if err != nil {
-		log.Printf("[SprinGo Scheduler] ❌ Invalid duration for fixed-delay job '%s': %v", name, err)
+		slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Invalid duration for fixed-delay job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Any("error", err))
 		return
 	}
 
@@ -275,7 +307,10 @@ func scheduleFixedDelay(name, durationStr string, fn JobFunc) {
 		defer schedulerWg.Done()
 		runFixedDelayLoop(name, d, fn, schedulerStopChan)
 	}()
-	log.Printf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with fixed-delay: %s", name, durationStr)
+	slog.Info(fmt.Sprintf("[SprinGo Scheduler] 🕒 Job '%s' scheduled with fixed-delay: %s", name, durationStr),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("job", name),
+		slog.String("duration", durationStr))
 }
 
 func runFixedDelayLoop(name string, d time.Duration, fn JobFunc, stopChan chan struct{}) {
@@ -285,7 +320,9 @@ func runFixedDelayLoop(name string, d time.Duration, fn JobFunc, stopChan chan s
 		case <-time.After(d):
 			// Proceed to next iteration
 		case <-stopChan:
-			log.Printf("[SprinGo Scheduler] Stopping fixed-delay loop for job '%s'", name)
+			slog.Info(fmt.Sprintf("[SprinGo Scheduler] Stopping fixed-delay loop for job '%s'", name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("job", name))
 			return
 		}
 	}
@@ -298,7 +335,8 @@ func StopBackgroundJobs() {
 		schedulerMu.Unlock()
 		return
 	}
-	log.Println("[SprinGo Scheduler] Stopping background jobs engine...")
+	slog.Info("[SprinGo Scheduler] Stopping background jobs engine...",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 
 	if cronManager != nil {
 		cronManager.Stop()
@@ -315,13 +353,16 @@ func StopBackgroundJobs() {
 	// Wait for goroutines of fixed-rate and fixed-delay tasks to stop gracefully
 	schedulerWg.Wait()
 	schedulerStopChan = nil
-	log.Println("[SprinGo Scheduler] ✅ Background jobs engine stopped gracefully")
+	slog.Info("[SprinGo Scheduler] ✅ Background jobs engine stopped gracefully",
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem))
 }
 
 func executeWithLock(name string, conf JobConf, fn JobFunc) error {
 	db := ioc.GetContainer().GetDB()
 	if db == nil {
-		log.Printf("[SprinGo Scheduler] ⚠️ Lock enabled for job '%s' but primary database is not configured. Running without lock.", name)
+		slog.Warn(fmt.Sprintf("[SprinGo Scheduler] ⚠️ Lock enabled for job '%s' but primary database is not configured. Running without lock.", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name))
 		return executeWithRecover(name, fn)
 	}
 
@@ -331,7 +372,10 @@ func executeWithLock(name string, conf JobConf, fn JobFunc) error {
 
 	acquired, err := acquireShedLock(db, name, lockUntil, now)
 	if err != nil {
-		log.Printf("[SprinGo Scheduler] ❌ Lock transaction failed for job '%s': %v", name, err)
+		slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Lock transaction failed for job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Any("error", err))
 		return err
 	}
 
@@ -339,7 +383,11 @@ func executeWithLock(name string, conf JobConf, fn JobFunc) error {
 		return nil
 	}
 
-	log.Printf("[SprinGo Scheduler] 🔒 Lock ACQUIRED for job '%s' until %v (Instance: %s)", name, lockUntil, instanceID)
+	slog.Info(fmt.Sprintf("[SprinGo Scheduler] 🔒 Lock ACQUIRED for job '%s' until %v (Instance: %s)", name, lockUntil, instanceID),
+		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+		slog.String("job", name),
+		slog.Time("lockUntil", lockUntil),
+		slog.String("instanceId", instanceID))
 
 	jobErr := executeWithRecover(name, fn)
 
@@ -431,9 +479,15 @@ func releaseShedLock(db *gorm.DB, name string, now time.Time, atLeast time.Durat
 	releaseTime := calculateReleaseTime(now, atLeast)
 
 	if err := db.Model(&ShedLockEntity{}).Where("name = ? AND locked_by = ?", name, instanceID).Update("lock_until", releaseTime).Error; err != nil {
-		log.Printf("[SprinGo Scheduler] ❌ Failed to release lock for job '%s': %v", name, err)
+		slog.Error(fmt.Sprintf("[SprinGo Scheduler] ❌ Failed to release lock for job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Any("error", err))
 	} else {
-		log.Printf("[SprinGo Scheduler] 🔓 Lock RELEASED for job '%s' (Hold until: %v)", name, releaseTime)
+		slog.Info(fmt.Sprintf("[SprinGo Scheduler] 🔓 Lock RELEASED for job '%s' (Hold until: %v)", name, releaseTime),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name),
+			slog.Time("releaseTime", releaseTime))
 	}
 }
 
@@ -499,7 +553,10 @@ func executeWithRecover(name string, fn JobFunc) (err error) {
 	trackExecution(name)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[SprinGo Scheduler] 🚨 Panic recovered in job '%s': %v", name, r)
+			slog.Error(fmt.Sprintf("[SprinGo Scheduler] 🚨 Panic recovered in job '%s'", name),
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.String("job", name),
+				slog.Any("panic", r))
 			err = fmt.Errorf("panic: %v", r)
 		}
 	}()
@@ -518,9 +575,13 @@ func TriggerJobManually(name string) error {
 	}
 
 	go func() {
-		log.Printf("[SprinGo Scheduler] ⚡ Manual execution TRIGGERED for job '%s'", name)
+		slog.Info(fmt.Sprintf("[SprinGo Scheduler] ⚡ Manual execution TRIGGERED for job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name))
 		_ = executeWithRecover(name, task.fn)
-		log.Printf("[SprinGo Scheduler] ⚡ Manual execution COMPLETED for job '%s'", name)
+		slog.Info(fmt.Sprintf("[SprinGo Scheduler] ⚡ Manual execution COMPLETED for job '%s'", name),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("job", name))
 	}()
 
 	return nil

@@ -6,13 +6,14 @@ import (
 	"crypto/subtle"
 	_ "embed"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/logging"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -182,8 +183,9 @@ func RegisterActuatorRoutes(r chi.Router) {
 	// Pre-generate credentials on startup to print password to console log immediately
 	user, _ := getOrGenerateCredentials()
 	if generatedPassword != "" {
-		log.Printf("🔑 [Security] A temporary security password was generated for user '%s' "+
-			"(set 'spring.security.user.password' to configure)", user)
+		slog.Info(fmt.Sprintf("🔑 [Security] A temporary security password was generated for user '%s' (set 'spring.security.user.password' to configure)", user),
+			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+			slog.String("user", user))
 	}
 
 	// Add Basic Auth specifically for actuator endpoints

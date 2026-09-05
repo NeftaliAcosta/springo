@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -63,7 +63,10 @@ func (l *ConfigLoader) Load() error {
 	baseFile := "application.yaml"
 	if err := l.loadYamlFile(baseFile); err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("[SprinGo] Base configuration %s not found, proceeding with internal defaults", baseFile)
+			slog.Debug("Base configuration not found, proceeding with internal defaults",
+				slog.String("subsystem", "springo"),
+				slog.String("file", baseFile),
+			)
 		} else {
 			return fmt.Errorf("failed to load base configuration file %s: %v", baseFile, err)
 		}
@@ -73,13 +76,23 @@ func (l *ConfigLoader) Load() error {
 	if l.ActiveProfile != "default" {
 		profileFile := fmt.Sprintf("application-%s.yaml", l.ActiveProfile)
 		if err := l.loadYamlFile(profileFile); err != nil {
-			log.Printf("[SprinGo] Warning: Profile-specific file %s not found or unreadable: %v", profileFile, err)
+			slog.Warn("Profile-specific configuration file not found or unreadable",
+				slog.String("subsystem", "springo"),
+				slog.String("file", profileFile),
+				slog.Any("error", err),
+			)
 		} else {
-			log.Printf("[SprinGo] Active profile configuration merged: %s", profileFile)
+			slog.Info("Active profile configuration merged",
+				slog.String("subsystem", "springo"),
+				slog.String("file", profileFile),
+			)
 		}
 	}
 
-	log.Printf("[SprinGo] Configuration initialized (Profile: %s)", l.ActiveProfile)
+	slog.Info("Configuration initialized",
+		slog.String("subsystem", "springo"),
+		slog.String("profile", l.ActiveProfile),
+	)
 	return nil
 }
 
