@@ -53,9 +53,9 @@ security:
 
 ---
 
-## 3. Extracting the Authenticated Principal & Roles in Services
+## 3. Security Context API & Downstream Token Propagation
 
-When a valid Bearer token is provided, SprinGo automatically populates `context.Context`:
+When a valid Bearer token is provided, SprinGo automatically populates `context.Context` with strongly-typed, immutable accessors:
 
 **Suggested File Path**: `internal/application/service/order_service.go`
 ```go
@@ -64,29 +64,47 @@ package service
 import (
     "context"
     "fmt"
+    "net/http"
 
     "github.com/NeftaliAcosta/springo/framework/security"
 )
 
 func (s *OrderService) GetMyOrders(ctx context.Context) ([]Order, error) {
-    // Extract authenticated principal
+    // 1. Extract authenticated principal
     username := security.GetUser(ctx)
     if username == "" {
         return nil, fmt.Errorf("unauthorized")
     }
 
-    // Extract roles (prefixed with ROLE_)
-    roles := security.GetRoles(ctx)
+    // 2. Role verification (zero-allocation helper)
+    if !security.HasRole(ctx, "ROLE_USER") {
+        return nil, fmt.Errorf("forbidden: user role required")
+    }
 
-    // Extract raw bearer token for downstream API calls
+    // 3. Extract specific typed claim without cloning the full map
+    tenantID, ok := security.GetClaim[string](ctx, "tenant_id")
+    if !ok {
+        return nil, fmt.Errorf("missing tenant_id claim")
+    }
+
+    // 4. Downstream Bearer token propagation to external microservices
     token := security.GetBearerToken(ctx)
+    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://inventory-service/api/stock", nil)
+    req.Header.Set("Authorization", "Bearer "+token)
 
-    // Extract full claims map if needed
-    claims := security.GetClaims(ctx)
-
-    return s.repo.FindByUser(ctx, username)
+    return s.repo.FindByUserAndTenant(ctx, username, tenantID)
 }
 ```
+
+### Available Security Context Helpers:
+- `security.GetUser(ctx)`: Returns principal username or empty string.
+- `security.GetRoles(ctx)`: Returns defensive copy of granted authorities slice.
+- `security.HasRole(ctx, role)`: Verifies role membership with zero allocations.
+- `security.HasAnyRole(ctx, roles...)`: Verifies if context has any of the listed roles.
+- `security.GetClaims(ctx)`: Returns a defensive cloned copy of JWT claims `map[string]any`.
+- `security.GetClaim[T](ctx, key)`: Zero-allocation typed claim accessor (`(T, bool)`).
+- `security.GetBearerToken(ctx)`: Returns raw token string for downstream HTTP calls.
+- `security.GetUserInfo(ctx)`: Returns consolidated `*UserInfo` struct.
 
 ---
 
