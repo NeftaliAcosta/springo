@@ -68,7 +68,7 @@ func isLegacyJwtConfigured(props *security.JwtProperties) bool {
 }
 
 func defaultSecurityConfig() securityConfig {
-	provider := security.NewJwtProvider("default-secret", 15)
+	provider := security.NewJwtProvider("", 15)
 	return securityConfig{
 		enabled:         true,
 		publicPaths:     []string{"/swagger"},
@@ -86,9 +86,14 @@ func buildOAuth2Config(props *security.OAuth2ResourceServerProperties) securityC
 	provider := security.NewJwtProvider(secret, props.Expiration).
 		WithAsymmetricConfig(jwksURL, props.PublicKey, props.GetAlgorithm())
 
+	publicPaths := props.PublicPaths
+	if len(publicPaths) == 0 {
+		publicPaths = []string{"/swagger"}
+	}
+
 	return securityConfig{
 		enabled:          props.IsEnabled(),
-		publicPaths:      props.PublicPaths,
+		publicPaths:      publicPaths,
 		principalClaim:   props.GetPrincipalClaim(),
 		authoritiesClaim: props.AuthoritiesClaim,
 		resourceID:       props.ResourceID,
@@ -99,8 +104,8 @@ func buildOAuth2Config(props *security.OAuth2ResourceServerProperties) securityC
 }
 
 func resolveOAuth2Secret(props *security.OAuth2ResourceServerProperties) string {
-	if props.Secret == "" && props.GetAlgorithm() == "HS256" {
-		return "default-secret"
+	if props == nil {
+		return ""
 	}
 	return props.Secret
 }
@@ -128,9 +133,14 @@ func buildBuiltInValidators(props *security.OAuth2ResourceServerProperties) []se
 
 // BuildLegacyJwtConfig constructs securityConfig from legacy JWT properties.
 func buildLegacyJwtConfig(props *security.JwtProperties) securityConfig {
-	secret := props.Secret
-	if secret == "" && (props.Algorithm == "" || props.Algorithm == "HS256") {
-		secret = "default-secret"
+	secret := ""
+	var publicPaths []string
+	if props != nil {
+		secret = props.Secret
+		publicPaths = props.PublicPaths
+	}
+	if len(publicPaths) == 0 {
+		publicPaths = []string{"/swagger"}
 	}
 
 	provider := security.NewJwtProvider(secret, props.Expiration).
@@ -138,7 +148,7 @@ func buildLegacyJwtConfig(props *security.JwtProperties) securityConfig {
 
 	return securityConfig{
 		enabled:         true,
-		publicPaths:     props.PublicPaths,
+		publicPaths:     publicPaths,
 		principalClaim:  "sub",
 		authorityPrefix: "ROLE_",
 		provider:        provider,

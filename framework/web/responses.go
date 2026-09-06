@@ -3,22 +3,48 @@ package web
 import (
 	"encoding/json"
 	"encoding/xml"
-	"github.com/go-chi/chi/v5"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
+
+	"github.com/go-chi/chi/v5"
 )
 
-// DecodeJSON parses the request body into a schema
+// DefaultMaxJSONBodyBytes sets the maximum allowed payload size for JSON bodies (10MB).
+const DefaultMaxJSONBodyBytes int64 = 10 * 1024 * 1024
+
+// DecodeJSON parses the request body into a schema with size limit and single-document enforcement.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, schema interface{}) bool {
-	if err := json.NewDecoder(r.Body).Decode(schema); err != nil {
+	if r.Body == nil {
+		return true
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxJSONBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+
+	if err := decoder.Decode(schema); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "Request body exceeds maximum allowed size", http.StatusRequestEntityTooLarge)
+			return false
+		}
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return false
 	}
+
+	// Verify no trailing extra documents exist in the body
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		http.Error(w, "Request body must contain only a single JSON document", http.StatusBadRequest)
+		return false
+	}
+
 	return true
 }
 
-// BindRequest populates a struct with Path and Query parameters based on tags
+// BindRequest populates a struct with Path and Query parameters based on tags.
 func BindRequest(r *http.Request, dest interface{}) error {
 	val := reflect.ValueOf(dest)
 	if val.Kind() != reflect.Pointer || val.Elem().Kind() != reflect.Struct {
@@ -40,31 +66,73 @@ func BindRequest(r *http.Request, dest interface{}) error {
 		}
 
 		if rawValue != "" {
-			setFieldValue(fieldVal, rawValue)
+			if err := setFieldValue(fieldVal, rawValue); err != nil {
+				return fmt.Errorf("field %s: %w", field.Name, err)
+			}
 		}
 	}
 	return nil
 }
 
-func setFieldValue(field reflect.Value, value string) {
+func getBitSize(k reflect.Kind) int {
+	switch k {
+	case reflect.Int8, reflect.Uint8:
+		return 8
+	case reflect.Int16, reflect.Uint16:
+		return 16
+	case reflect.Int32, reflect.Uint32:
+		return 32
+	case reflect.Int64, reflect.Uint64:
+		return 64
+	default:
+		return 0
+	}
+}
+
+func setFieldValue(field reflect.Value, value string) error {
 	if !field.CanSet() {
-		return
+		return nil
 	}
 	switch field.Kind() {
 	case reflect.String:
 		field.SetString(value)
+		return nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if i, err := strconv.ParseInt(value, 10, 64); err == nil {
-			field.SetInt(i)
+		bitSize := getBitSize(field.Kind())
+		i, err := strconv.ParseInt(value, 10, bitSize)
+		if err != nil {
+			return fmt.Errorf("invalid integer value %q: %w", value, err)
 		}
+		field.SetInt(i)
+		return nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if i, err := strconv.ParseUint(value, 10, 64); err == nil {
-			field.SetUint(i)
+		bitSize := getBitSize(field.Kind())
+		u, err := strconv.ParseUint(value, 10, bitSize)
+		if err != nil {
+			return fmt.Errorf("invalid unsigned integer value %q: %w", value, err)
 		}
+		field.SetUint(u)
+		return nil
 	case reflect.Bool:
-		if b, err := strconv.ParseBool(value); err == nil {
-			field.SetBool(b)
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("invalid boolean value %q: %w", value, err)
 		}
+		field.SetBool(b)
+		return nil
+	case reflect.Float32, reflect.Float64:
+		bitSize := 64
+		if field.Kind() == reflect.Float32 {
+			bitSize = 32
+		}
+		f, err := strconv.ParseFloat(value, bitSize)
+		if err != nil {
+			return fmt.Errorf("invalid float value %q: %w", value, err)
+		}
+		field.SetFloat(f)
+		return nil
+	default:
+		return nil
 	}
 }
 

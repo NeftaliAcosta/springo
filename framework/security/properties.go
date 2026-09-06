@@ -22,33 +22,62 @@ type JwtProperties struct {
 
 // Validate ensures that JWT configuration is secure for production environments.
 func (p *JwtProperties) Validate() error {
-	alg := strings.ToUpper(strings.TrimSpace(p.Algorithm))
-	if alg == "" {
-		alg = "HS256"
+	if p.isEmpty() {
+		return nil
 	}
 
-	if alg != "HS256" && alg != "RS256" {
-		return fmt.Errorf("unsupported JWT algorithm %q (supported: HS256, RS256)", p.Algorithm)
+	alg, err := p.normalizeAlgorithm()
+	if err != nil {
+		return err
 	}
 
-	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
-	isDevProfile := profile == "" || profile == "default" || profile == "dev" ||
-		profile == "development" || profile == "local" || profile == "test"
-	if isDevProfile {
-		if p.Secret == "springo-ultra-secret-key-for-development" || p.Secret == "default-secret" {
-			slog.Warn("Using default development JWT secret. Set SPRINGO_PROFILES_ACTIVE=prod for production")
-		}
+	if isDevProfile() {
+		p.warnIfDevSecret()
 		return nil
 	}
 
 	if alg == "RS256" {
-		if p.JwksURL == "" && p.PublicKey == "" {
-			return fmt.Errorf("JWT algorithm RS256 requires either 'jwks-url' or 'public-key' in production profile")
-		}
-		return nil
+		return p.validateRS256()
 	}
 
-	// Default HS256 validation
+	return p.validateHS256()
+}
+
+func (p *JwtProperties) normalizeAlgorithm() (string, error) {
+	alg := strings.ToUpper(strings.TrimSpace(p.Algorithm))
+	if alg == "" {
+		return "HS256", nil
+	}
+	if alg != "HS256" && alg != "RS256" {
+		return "", fmt.Errorf("unsupported JWT algorithm %q (supported: HS256, RS256)", p.Algorithm)
+	}
+	return alg, nil
+}
+
+func isDevProfile() bool {
+	profile := strings.ToLower(strings.TrimSpace(os.Getenv("SPRINGO_PROFILES_ACTIVE")))
+	switch profile {
+	case "", "default", "dev", "development", "local", "test":
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *JwtProperties) warnIfDevSecret() {
+	if p.Secret == "springo-ultra-secret-key-for-development" || p.Secret == "default-secret" {
+		slog.Warn("Using default development JWT secret. Set SPRINGO_PROFILES_ACTIVE=prod for production")
+	}
+}
+
+func (p *JwtProperties) validateRS256() error {
+	if p.JwksURL == "" && p.PublicKey == "" {
+		return fmt.Errorf("JWT algorithm RS256 requires either 'jwks-url' or 'public-key' in production profile")
+	}
+	return nil
+}
+
+func (p *JwtProperties) validateHS256() error {
 	if p.Secret == "" || p.Secret == "default-secret" || p.Secret == "springo-ultra-secret-key-for-development" {
 		return fmt.Errorf("JWT secret is insecure, empty, or uses development defaults in production profile")
 	}
@@ -56,6 +85,11 @@ func (p *JwtProperties) Validate() error {
 		return fmt.Errorf("JWT secret must be at least 32 characters (256 bits) for production deployment")
 	}
 	return nil
+}
+
+func (p *JwtProperties) isEmpty() bool {
+	return p.Secret == "" && p.JwksURL == "" && p.PublicKey == "" &&
+		len(p.PublicPaths) == 0 && p.Expiration == 0 && strings.TrimSpace(p.Algorithm) == ""
 }
 
 func init() {

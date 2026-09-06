@@ -17,12 +17,15 @@ func NewBaseRepository[T any](db *gorm.DB) BaseRepository[T] {
 	return BaseRepository[T]{db: db}
 }
 
-// GetDB returns the transaction if present in context, otherwise the standard connection.
+// GetDB returns the transaction or standard connection bound to the request context.
 func (r *BaseRepository[T]) GetDB(ctx context.Context) *gorm.DB {
 	if tx := database.GetTxFromContext(ctx); tx != nil {
-		return tx
+		return tx.WithContext(ctx)
 	}
-	return r.db
+	if r.db != nil {
+		return r.db.WithContext(ctx)
+	}
+	return nil
 }
 
 // Save inserts or updates an entity with context support.

@@ -59,11 +59,27 @@ func (m *RetryManager) ProcessDLQ() error {
 	return nil
 }
 
-func (m *RetryManager) updateRetryState(db *gorm.DB, p *defaultEventPublisher, fe FailedEventEntity, props *EventProperties) {
+func (m *RetryManager) updateRetryState(
+	db *gorm.DB,
+	p *defaultEventPublisher,
+	fe FailedEventEntity,
+	props *EventProperties,
+) {
+	nextRetry := CalculateNextRetry(fe.Retries+1, props)
+	res := db.Model(&FailedEventEntity{}).
+		Where("id = ? AND status IN ?", fe.ID, []string{"PENDING", "FAILED"}).
+		Updates(map[string]interface{}{
+			"status":        "RETRYING",
+			"retries":       gorm.Expr("retries + 1"),
+			"next_retry_at": nextRetry,
+		})
+	if res.Error != nil || res.RowsAffected == 0 {
+		return
+	}
+
 	fe.Retries++
 	fe.Status = "RETRYING"
-	fe.NextRetryAt = CalculateNextRetry(fe.Retries, props)
-	_ = db.Save(&fe).Error
+	fe.NextRetryAt = nextRetry
 
 	slog.Info("Attempting recovery for event",
 		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),

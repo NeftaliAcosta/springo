@@ -96,7 +96,7 @@ func (s *ServerSecurityProperties) IsCsrfEnabled() bool {
 		return *s.CsrfEnabled
 	}
 
-	if oauth2Props := config.Get[security.OAuth2ResourceServerProperties](); oauth2Props != nil && oauth2Props.IsEnabled() {
+	if oauth2Props := config.Get[security.OAuth2ResourceServerProperties](); oauth2Props != nil && oauth2Props.IsEnabled() && hasOAuth2Configured(oauth2Props) {
 		return false
 	}
 
@@ -105,6 +105,10 @@ func (s *ServerSecurityProperties) IsCsrfEnabled() bool {
 	}
 
 	return false
+}
+
+func hasOAuth2Configured(props *security.OAuth2ResourceServerProperties) bool {
+	return props.IssuerURI != "" || props.JwksURI != "" || props.Secret != "" || props.PublicKey != ""
 }
 
 // IsSecurityHeadersEnabled determines whether security headers middleware is active (default true).

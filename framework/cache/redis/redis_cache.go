@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -44,11 +45,30 @@ func getClient() *goredis.Client {
 	if props == nil {
 		props = &RedisProperties{Host: "localhost", Port: 6379, DB: 0}
 	}
-	client = goredis.NewClient(&goredis.Options{
-		Addr:     fmt.Sprintf("%s:%d", props.Host, props.Port),
-		Password: props.Password,
-		DB:       props.DB,
-	})
+
+	var opt *goredis.Options
+	if props.URL != "" {
+		var err error
+		opt, err = goredis.ParseURL(props.URL)
+		if err != nil {
+			slog.Warn("Failed to parse Redis URL, falling back to host/port",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Any("error", err),
+			)
+			opt = &goredis.Options{
+				Addr:     fmt.Sprintf("%s:%d", props.Host, props.Port),
+				Password: props.Password,
+				DB:       props.DB,
+			}
+		}
+	} else {
+		opt = &goredis.Options{
+			Addr:     fmt.Sprintf("%s:%d", props.Host, props.Port),
+			Password: props.Password,
+			DB:       props.DB,
+		}
+	}
+	client = goredis.NewClient(opt)
 
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -56,14 +76,12 @@ func getClient() *goredis.Client {
 	if err := client.Ping(ctx).Err(); err != nil {
 		slog.Warn(fmt.Sprintf("⚠️ [Cache] Failed to connect to Redis: %v", err),
 			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
-			slog.String("host", props.Host),
-			slog.Int("port", props.Port),
+			slog.String("addr", opt.Addr),
 			slog.Any("error", err))
 	} else {
-		slog.Info(fmt.Sprintf("✅ [Cache] Connected to Redis at %s:%d", props.Host, props.Port),
+		slog.Info(fmt.Sprintf("✅ [Cache] Connected to Redis at %s", opt.Addr),
 			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
-			slog.String("host", props.Host),
-			slog.Int("port", props.Port))
+			slog.String("addr", opt.Addr))
 	}
 	return client
 }
@@ -105,7 +123,20 @@ func (c *redisCache) Set(ctx context.Context, key string, value any, ttl time.Du
 	if t == 0 {
 		t = c.ttl
 	}
-	return c.client.Set(ctx, c.key(key), value, t).Err()
+
+	var payload any
+	switch v := value.(type) {
+	case string, []byte, int, int64, float64, bool:
+		payload = v
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal cache value: %w", err)
+		}
+		payload = b
+	}
+
+	return c.client.Set(ctx, c.key(key), payload, t).Err()
 }
 
 func (c *redisCache) Increment(ctx context.Context, key string, delta int64, ttl time.Duration) (int64, error) {

@@ -81,7 +81,10 @@ func (w *responseCaptureWriter) WriteHeader(statusCode int) {
 	w.captured.StatusCode = statusCode
 }
 
-// Write buffers payload bytes in memory.
+// MaxResponseCaptureBytes defines the upper limit for buffering response bodies in memory (10MB).
+const MaxResponseCaptureBytes = 10 * 1024 * 1024
+
+// Write buffers payload bytes in memory up to MaxResponseCaptureBytes.
 func (w *responseCaptureWriter) Write(b []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -89,14 +92,29 @@ func (w *responseCaptureWriter) Write(b []byte) (int, error) {
 		w.wroteHeader = true
 		w.captured.StatusCode = http.StatusOK
 	}
-	w.captured.Body = append(w.captured.Body, b...)
+
+	remaining := MaxResponseCaptureBytes - len(w.captured.Body)
+	if remaining > 0 {
+		toAppend := b
+		if len(toAppend) > remaining {
+			toAppend = toAppend[:remaining]
+		}
+		w.captured.Body = append(w.captured.Body, toAppend...)
+	}
+
 	return len(b), nil
 }
 
-// Flush forwards flush events to the underlying ResponseWriter if supported.
+// Flush forwards flush events to the underlying ResponseWriter after synchronizing headers and body.
 func (w *responseCaptureWriter) Flush() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.hijacked {
+		return
+	}
+	w.syncHeaders()
+	w.syncStatusCode()
+	w.syncBody()
 	if flusher, ok := w.underlying.(http.Flusher); ok {
 		flusher.Flush()
 	}

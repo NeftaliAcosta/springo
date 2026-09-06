@@ -338,8 +338,13 @@ func executeDlqRetry(w http.ResponseWriter, r *http.Request, db *gorm.DB, id str
 		slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
 		slog.String("eventId", id),
 		slog.String("eventName", row.EventName))
-	_ = db.Exec("UPDATE springo_failed_events SET retries = retries + 1, status = 'RETRYING', "+
-		"updated_at = ? WHERE id = ?", time.Now(), id)
+	res := db.Exec("UPDATE springo_failed_events SET retries = retries + 1, status = 'RETRYING', "+
+		"updated_at = ? WHERE id = ? AND status != 'RETRYING'", time.Now(), id)
+	if res.Error != nil || res.RowsAffected == 0 {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte("event is already being retried"))
+		return
+	}
 
 	if err := callback(r.Context(), row.EventName, row.Payload); err != nil {
 		slog.Error(fmt.Sprintf("❌ [Actuator-DLQ] Manual retry failed for event ID %s", id),

@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
 	"github.com/NeftaliAcosta/springo/framework/security"
 )
 
@@ -122,7 +123,11 @@ func TestIsActuatorPath(t *testing.T) {
 }
 
 func TestAuthMiddlewareValidTokenPasses(t *testing.T) {
-	secret := "default-secret"
+	secret := "test-secret-32-bytes-long-for-valid-hs256"
+	config.RegisterProperties("security.jwt", &security.JwtProperties{
+		Secret:    secret,
+		Algorithm: "HS256",
+	})
 	provider := security.NewJwtProvider(secret, 15)
 
 	tokenStr, err := provider.GenerateTokenWithClaims("uuid-123", []string{"USER"}, map[string]interface{}{

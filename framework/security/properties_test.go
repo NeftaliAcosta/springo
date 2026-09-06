@@ -12,6 +12,8 @@ func TestJwtProperties_Validate(t *testing.T) {
 		profile     string
 		secret      string
 		algorithm   string
+		jwksURL     string
+		publicKey   string
 		expectError bool
 	}{
 		{
@@ -74,6 +76,26 @@ func TestJwtProperties_Validate(t *testing.T) {
 			algorithm:   "ES256",
 			expectError: true,
 		},
+		{
+			name:        "Prod profile RS256 without JWKS or public key is rejected",
+			profile:     "prod",
+			algorithm:   "RS256",
+			expectError: true,
+		},
+		{
+			name:        "Prod profile RS256 with JWKS URL is acceptable",
+			profile:     "prod",
+			algorithm:   "RS256",
+			jwksURL:     "https://auth.example.com/.well-known/jwks.json",
+			expectError: false,
+		},
+		{
+			name:        "Prod profile RS256 with public key is acceptable",
+			profile:     "prod",
+			algorithm:   "RS256",
+			publicKey:   "-----BEGIN PUBLIC KEY-----\nMIIB...IDAQAB\n-----END PUBLIC KEY-----",
+			expectError: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -85,6 +107,8 @@ func TestJwtProperties_Validate(t *testing.T) {
 				Secret:     tt.secret,
 				Expiration: 60,
 				Algorithm:  tt.algorithm,
+				JwksURL:    tt.jwksURL,
+				PublicKey:  tt.publicKey,
 			}
 
 			// Act

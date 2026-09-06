@@ -53,7 +53,12 @@ func RegisterListener(handler interface{}) {
 
 	eventType := handlerType.In(1)
 
-	wrappedHandler := func(ctx context.Context, event interface{}) error {
+	wrappedHandler := func(ctx context.Context, event interface{}) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("listener panicked: %v", r)
+			}
+		}()
 		args := []reflect.Value{
 			reflect.ValueOf(ctx),
 			reflect.ValueOf(event),
@@ -621,21 +626,29 @@ func dispatchSinglePendingEvent(publisher *defaultEventPublisher, pe OutboxEvent
 		return
 	}
 
-	eventVal := reflect.New(typ).Interface()
-	if err := json.Unmarshal([]byte(pe.Payload), eventVal); err != nil {
-		slog.Error("Failed to unmarshal event payload",
-			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
-			slog.Uint64("event_id", uint64(pe.ID)),
-			slog.Any("error", err),
-		)
-		return
-	}
-
 	var finalEvent interface{}
 	if typ.Kind() == reflect.Pointer {
-		finalEvent = eventVal
+		ptr := reflect.New(typ.Elem()).Interface()
+		if err := json.Unmarshal([]byte(pe.Payload), ptr); err != nil {
+			slog.Error("Failed to unmarshal event payload",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Uint64("event_id", uint64(pe.ID)),
+				slog.Any("error", err),
+			)
+			return
+		}
+		finalEvent = ptr
 	} else {
-		finalEvent = reflect.ValueOf(eventVal).Elem().Interface()
+		ptr := reflect.New(typ).Interface()
+		if err := json.Unmarshal([]byte(pe.Payload), ptr); err != nil {
+			slog.Error("Failed to unmarshal event payload",
+				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
+				slog.Uint64("event_id", uint64(pe.ID)),
+				slog.Any("error", err),
+			)
+			return
+		}
+		finalEvent = reflect.ValueOf(ptr).Elem().Interface()
 	}
 
 	slog.Debug("Redespatching outbox event",
@@ -874,14 +887,20 @@ func RedispatchEvent(ctx context.Context, eventName string, payload string) erro
 		return fmt.Errorf("no listener registered for event type '%s'", eventName)
 	}
 
-	// Create a new instance pointer of the target event type
-	ptr := reflect.New(foundType).Interface()
-	if err := json.Unmarshal([]byte(payload), ptr); err != nil {
-		return fmt.Errorf("failed to deserialize event payload: %w", err)
+	var eventVal interface{}
+	if foundType.Kind() == reflect.Pointer {
+		ptr := reflect.New(foundType.Elem()).Interface()
+		if err := json.Unmarshal([]byte(payload), ptr); err != nil {
+			return fmt.Errorf("failed to deserialize event payload: %w", err)
+		}
+		eventVal = ptr
+	} else {
+		ptr := reflect.New(foundType).Interface()
+		if err := json.Unmarshal([]byte(payload), ptr); err != nil {
+			return fmt.Errorf("failed to deserialize event payload: %w", err)
+		}
+		eventVal = reflect.ValueOf(ptr).Elem().Interface()
 	}
-
-	// Publish/dispatch the dereferenced event instance directly to handlers
-	eventVal := reflect.ValueOf(ptr).Elem().Interface()
 
 	var firstErr error
 	for _, handler := range handlers {

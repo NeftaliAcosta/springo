@@ -69,27 +69,53 @@ func (v *IssuerValidator) Validate(_ context.Context, claims jwt.MapClaims) erro
 	return nil
 }
 
-// AudienceValidator validates that the token 'aud' or 'azp' matches configured audiences.
+// AudienceValidator validates that the token 'aud' matches configured audiences.
+// If AllowedAuthorizedParties is also configured, it independently validates the 'azp' claim.
 type AudienceValidator struct {
-	AllowedAudiences []string
+	AllowedAudiences         []string
+	AllowedAuthorizedParties []string
 }
 
 // Validate verifies that the token audience matches at least one allowed audience.
+// If AllowedAuthorizedParties is configured, it also verifies that 'azp' matches.
 func (v *AudienceValidator) Validate(_ context.Context, claims jwt.MapClaims) error {
-	if v == nil || len(v.AllowedAudiences) == 0 {
+	if v == nil {
 		return nil
 	}
 
-	allowedSet := make(map[string]bool, len(v.AllowedAudiences))
-	for _, a := range v.AllowedAudiences {
-		allowedSet[a] = true
+	if len(v.AllowedAudiences) > 0 {
+		audClaim, exists := claims["aud"]
+		if !exists || audClaim == nil {
+			return fmt.Errorf("missing 'aud' claim in token, expected one of %v", v.AllowedAudiences)
+		}
+
+		allowedSet := make(map[string]bool, len(v.AllowedAudiences))
+		for _, a := range v.AllowedAudiences {
+			allowedSet[a] = true
+		}
+
+		if !matchAudienceClaim(audClaim, allowedSet) {
+			return fmt.Errorf("token audience does not match any of the allowed audiences %v", v.AllowedAudiences)
+		}
 	}
 
-	if matchAudienceClaim(claims["aud"], allowedSet) || matchAzpClaim(claims["azp"], allowedSet) {
-		return nil
+	if len(v.AllowedAuthorizedParties) > 0 {
+		azpClaim, exists := claims["azp"]
+		if !exists || azpClaim == nil {
+			return fmt.Errorf("missing 'azp' claim in token, expected one of %v", v.AllowedAuthorizedParties)
+		}
+
+		azpSet := make(map[string]bool, len(v.AllowedAuthorizedParties))
+		for _, azp := range v.AllowedAuthorizedParties {
+			azpSet[azp] = true
+		}
+
+		if !matchAzpClaim(azpClaim, azpSet) {
+			return fmt.Errorf("token authorized party %v does not match allowed azp %v", azpClaim, v.AllowedAuthorizedParties)
+		}
 	}
 
-	return fmt.Errorf("token audience does not match any of the allowed audiences %v", v.AllowedAudiences)
+	return nil
 }
 
 // MatchAudienceClaim matches the audience claim against allowed audiences.

@@ -181,7 +181,7 @@ func registerPropertyBean(target interface{}) {
 	ioc.GetContainer().RegisterBean(t.Name(), target)
 }
 
-// Get retrieves a registered property bean from the IoC container
+// Get retrieves a registered property bean from the IoC container or registry.
 func Get[T any]() *T {
 	var zero T
 	t := reflect.TypeOf(zero)
@@ -190,14 +190,20 @@ func Get[T any]() *T {
 	if bean == nil {
 		bean = ioc.GetContainer().GetBean(t.Name())
 	}
-	if bean == nil {
-		return nil
+	if bean != nil {
+		if res, ok := bean.(*T); ok {
+			return res
+		}
 	}
-	res, ok := bean.(*T)
-	if !ok {
-		return nil
+
+	configMu.Lock()
+	defer configMu.Unlock()
+	for i := len(registry) - 1; i >= 0; i-- {
+		if target, ok := registry[i].target.(*T); ok {
+			return target
+		}
 	}
-	return res
+	return nil
 }
 
 // GetConfigProperties returns a copy of all loaded properties grouped by their prefix

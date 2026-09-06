@@ -36,7 +36,7 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 	r.Use(I18nMiddleware(defaultLocale))
 
 	// 2. Standard Chi Middlewares
-	r.Use(middleware.Logger)
+	r.Use(StructuredLoggerMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(InterceptorMiddleware)
 

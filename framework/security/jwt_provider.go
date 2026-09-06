@@ -24,6 +24,9 @@ type JwtProvider struct {
 
 // NewJwtProvider initializes the provider with security properties (symmetric key default).
 func NewJwtProvider(secret string, expirationMinutes int) *JwtProvider {
+	if expirationMinutes == 0 {
+		expirationMinutes = 15
+	}
 	return &JwtProvider{
 		secret:     []byte(secret),
 		expiration: time.Duration(expirationMinutes) * time.Minute,
@@ -117,7 +120,7 @@ func (p *JwtProvider) ValidateToken(tokenString string) (*jwt.Token, error) {
 
 	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return p.resolveKey(token, expectedAlg)
-	}, jwt.WithValidMethods([]string{expectedAlg}))
+	}, jwt.WithValidMethods([]string{expectedAlg}), jwt.WithExpirationRequired())
 }
 
 // ResolveKey resolves the key for a given token.

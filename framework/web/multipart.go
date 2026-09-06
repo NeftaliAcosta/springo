@@ -25,6 +25,25 @@ func BindMultipartRequest(w http.ResponseWriter, r *http.Request, dest any) erro
 }
 
 func bindMultipartRequest(w http.ResponseWriter, r *http.Request, dest any, props MultipartProperties) error {
+	if err := parseMultipartRequest(w, r, props); err != nil {
+		return err
+	}
+
+	structVal, ok := extractStructValue(dest)
+	if !ok {
+		return nil
+	}
+
+	structType := structVal.Type()
+	for i := 0; i < structType.NumField(); i++ {
+		if err := bindMultipartField(r, structType.Field(i), structVal.Field(i), props); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parseMultipartRequest(w http.ResponseWriter, r *http.Request, props MultipartProperties) error {
 	if !props.Enabled {
 		return frameworkErrors.BadRequest("Multipart requests are disabled", "MULTIPART_DISABLED")
 	}
@@ -33,55 +52,78 @@ func bindMultipartRequest(w http.ResponseWriter, r *http.Request, dest any, prop
 	if err := r.ParseMultipartForm(props.MemoryThreshold); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if stderrors.As(err, &maxBytesErr) {
-			return frameworkErrors.PayloadTooLarge("Multipart request exceeds the configured maximum size", "MULTIPART_REQUEST_TOO_LARGE")
+			return frameworkErrors.PayloadTooLarge(
+				"Multipart request exceeds the configured maximum size",
+				"MULTIPART_REQUEST_TOO_LARGE",
+			)
 		}
 		return frameworkErrors.BadRequest("Invalid multipart/form-data payload", "INVALID_MULTIPART_REQUEST")
 	}
+	return nil
+}
 
-	value := reflect.ValueOf(dest)
-	if value.Kind() != reflect.Pointer || value.IsNil() || value.Elem().Kind() != reflect.Struct {
+func extractStructValue(dest any) (reflect.Value, bool) {
+	val := reflect.ValueOf(dest)
+	if val.Kind() != reflect.Pointer || val.IsNil() {
+		return reflect.Value{}, false
+	}
+	elem := val.Elem()
+	if elem.Kind() != reflect.Struct {
+		return reflect.Value{}, false
+	}
+	return elem, true
+}
+
+func bindMultipartField(
+	r *http.Request,
+	field reflect.StructField,
+	fieldVal reflect.Value,
+	props MultipartProperties,
+) error {
+	formName := field.Tag.Get("form")
+	if formName == "" || formName == "-" || !fieldVal.CanSet() {
 		return nil
 	}
-	value = value.Elem()
-	typeOfValue := value.Type()
-	for i := 0; i < typeOfValue.NumField(); i++ {
-		field := typeOfValue.Field(i)
-		formName := field.Tag.Get("form")
-		if formName == "" || formName == "-" {
-			continue
-		}
-		fieldValue := value.Field(i)
-		if !fieldValue.CanSet() {
-			continue
-		}
-		if isMultipartFilePointer(fieldValue.Type()) {
-			files := r.MultipartForm.File[formName]
-			if len(files) > 0 {
-				if err := validateMultipartFileSize(files[0], props.MaxFileSize); err != nil {
-					return err
-				}
-				fieldValue.Set(reflect.ValueOf(files[0]))
-			}
-			continue
-		}
-		if isMultipartFileSlice(fieldValue.Type()) {
-			files := r.MultipartForm.File[formName]
-			for _, file := range files {
-				if err := validateMultipartFileSize(file, props.MaxFileSize); err != nil {
-					return err
-				}
-			}
-			if len(files) > 0 {
-				fieldValue.Set(reflect.ValueOf(files))
-			}
-			continue
-		}
-		values := r.MultipartForm.Value[formName]
-		if len(values) > 0 {
-			setFieldValue(fieldValue, values[0])
+
+	fieldType := fieldVal.Type()
+	if isMultipartFilePointer(fieldType) {
+		return bindSingleFileField(r.MultipartForm.File[formName], fieldVal, props.MaxFileSize)
+	}
+	if isMultipartFileSlice(fieldType) {
+		return bindSliceFileField(r.MultipartForm.File[formName], fieldVal, props.MaxFileSize)
+	}
+	return bindValueField(r.MultipartForm.Value[formName], fieldVal)
+}
+
+func bindSingleFileField(files []*multipart.FileHeader, fieldVal reflect.Value, maxSize int64) error {
+	if len(files) == 0 {
+		return nil
+	}
+	if err := validateMultipartFileSize(files[0], maxSize); err != nil {
+		return err
+	}
+	fieldVal.Set(reflect.ValueOf(files[0]))
+	return nil
+}
+
+func bindSliceFileField(files []*multipart.FileHeader, fieldVal reflect.Value, maxSize int64) error {
+	if len(files) == 0 {
+		return nil
+	}
+	for _, file := range files {
+		if err := validateMultipartFileSize(file, maxSize); err != nil {
+			return err
 		}
 	}
+	fieldVal.Set(reflect.ValueOf(files))
 	return nil
+}
+
+func bindValueField(values []string, fieldVal reflect.Value) error {
+	if len(values) == 0 {
+		return nil
+	}
+	return setFieldValue(fieldVal, values[0])
 }
 
 func multipartProperties() MultipartProperties {

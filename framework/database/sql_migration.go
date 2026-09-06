@@ -124,6 +124,14 @@ func createSQLMigration(file string, undoMap map[string]string, prefix string) (
 		Name:     migrationName,
 		Checksum: checksum,
 		Up: func(db *gorm.DB) error {
+			currentBytes, readErr := os.ReadFile(file)
+			if readErr != nil {
+				return fmt.Errorf("reading SQL migration file %s: %w", file, readErr)
+			}
+			if currentSum := ComputeSQLChecksum(currentBytes); currentSum != checksum {
+				return fmt.Errorf("SQL migration %s was modified after discovery (expected %s, got %s)",
+					file, checksum, currentSum)
+			}
 			return ExecuteSQLFile(db, file)
 		},
 		Down: buildDownFunc(undoPath),

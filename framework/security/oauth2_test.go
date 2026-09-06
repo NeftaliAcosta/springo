@@ -162,9 +162,17 @@ func TestAudienceValidatorMatchSlice(t *testing.T) {
 }
 
 func TestAudienceValidatorMatchAzp(t *testing.T) {
-	v := &security.AudienceValidator{AllowedAudiences: []string{"my-api-service"}}
-	if err := v.Validate(context.Background(), jwt.MapClaims{"azp": "my-api-service"}); err != nil {
-		t.Fatalf("expected valid azp, got %v", err)
+	v := &security.AudienceValidator{
+		AllowedAudiences:         []string{"my-api-service"},
+		AllowedAuthorizedParties: []string{"client-app"},
+	}
+	if err := v.Validate(context.Background(), jwt.MapClaims{"aud": "my-api-service", "azp": "client-app"}); err != nil {
+		t.Fatalf("expected valid aud and azp, got %v", err)
+	}
+
+	// Invalid when aud does not match even if azp matches
+	if err := v.Validate(context.Background(), jwt.MapClaims{"aud": "other-api", "azp": "client-app"}); err == nil {
+		t.Fatalf("expected error when audience does not match")
 	}
 }
 

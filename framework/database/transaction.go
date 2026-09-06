@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -269,7 +270,12 @@ func executeInNewTx(ctx context.Context, fn func(ctx context.Context) error, rea
 		return fmt.Errorf("transaction failed: primary database connection not found in container")
 	}
 
-	tx := db.Begin()
+	var tx *gorm.DB
+	if readOnly {
+		tx = db.WithContext(ctx).Begin(&sql.TxOptions{ReadOnly: true})
+	} else {
+		tx = db.WithContext(ctx).Begin()
+	}
 	if tx.Error != nil {
 		return fmt.Errorf("failed to start transaction: %w", tx.Error)
 	}
