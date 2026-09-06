@@ -26,28 +26,41 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc19` is a Release Candidate. Validate it in a staging environment before adopting it
-> for production workloads; public APIs may still receive release-blocking corrections before `v1.0.0`.
+> ⚠️ **Release status:** `v1.0.0-rc20` is a Release Candidate. Validate it in a staging environment before adopting it
+> in critical production workloads.
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Install SprinGo CLI
-
 ```bash
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc19
-```
+# 1. Install the SprinGo CLI
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc20
 
-### 2. Scaffold a New Enterprise Service
-
-```bash
+# 2. Create a new microservice
 springo new my-service
 cd my-service
-go run cmd/app/main.go
+
+# 3. Launch live reload dev environment (with dynamic port allocation & SQL loader)
+springo run
 ```
 
-Your API is now live at `http://localhost:8080` with Actuator Dashboard at `http://localhost:8080/actuator/dashboard`! 🎉
+---
+
+## 📂 Project Architecture
+
+```
+my-service/
+├── cmd/
+│   └── app/
+│       └── main.go            # Entrypoint (Pure Framework Bootstrap)
+├── internal/
+│   ├── domain/                # Entities, Value Objects & Domain Ports
+│   ├── application/           # Use Cases & Application Services
+│   └── infrastructure/        # Adapters (REST Controllers, DB Repositories)
+└── resources/
+    └── application.yaml       # Configuration & Profiles
+```
 
 ---
 
@@ -87,7 +100,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc19)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc20)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```

@@ -109,8 +109,8 @@ func TestContextHandler_Tracing(t *testing.T) {
 	ctxHandler := &ContextHandler{Handler: baseHandler}
 	logger := slog.New(ctxHandler)
 
-	ctx := context.WithValue(context.Background(), TraceIDKey, "trace-xyz-123")
-	ctx = context.WithValue(ctx, SpanIDKey, "span-abc-456")
+	ctx := context.WithValue(context.Background(), TraceIDKey, "trace-xyz-123") //nolint:staticcheck // Validates string-based context key
+	ctx = context.WithValue(ctx, SpanIDKey, "span-abc-456")                     //nolint:staticcheck // Validates string-based context key
 
 	logger.InfoContext(ctx, "traced operation")
 	output := buf.String()
