@@ -359,6 +359,10 @@ Explore our comprehensive library of step-by-step guides from zero to production
   Domain error sentinels, Problem Details output, and field-level validation errors.
 - 🌐 **[API Versioning & Response Capture Middleware](docs/tutorials/25_api_versioning_and_request_response_middleware.md)**:
   Route groups with scoped middleware pipelines, response buffering, and payload post-processing.
+- 🚀 **[Outbound HTTP Clients, IoC & Token Propagation](docs/tutorials/26_outbound_http_clients_and_ioc.md)**:
+  Connection pooling, timeout management, `http.Client` bean injection, and JWT/tracing propagation.
+- 🔐 **[Payload Transformation & Encryption Middleware](docs/tutorials/27_custom_payload_transform_middleware.md)**:
+  Bidirectional body rewriting, transparent AES-GCM request decryption, and captured response encryption.
 
 ### ⚡ Data, Transactions & Background Jobs
 - ⚡ **[Declarative Transaction Management](docs/tutorials/02_transaction_management.md)**:
