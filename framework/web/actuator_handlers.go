@@ -326,9 +326,10 @@ func handleActuatorDlqRetry(w http.ResponseWriter, r *http.Request) {
 func executeDlqRetry(w http.ResponseWriter, r *http.Request, db *gorm.DB, id string, row dlqFailedEventRow) {
 	dlqRetryCallbackMu.RLock()
 	callback := dlqRetryCallback
+	listenerCallback := dlqRetryListenerCallback
 	dlqRetryCallbackMu.RUnlock()
 
-	if callback == nil {
+	if callback == nil && listenerCallback == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("DLQ retry callback is not registered"))
 		return
@@ -346,7 +347,14 @@ func executeDlqRetry(w http.ResponseWriter, r *http.Request, db *gorm.DB, id str
 		return
 	}
 
-	if err := callback(r.Context(), row.EventName, row.Payload); err != nil {
+	var retryErr error
+	if listenerCallback != nil {
+		retryErr = listenerCallback(r.Context(), row.EventName, row.ListenerName, row.Payload)
+	} else {
+		retryErr = callback(r.Context(), row.EventName, row.Payload)
+	}
+	if retryErr != nil {
+		err := retryErr
 		slog.Error(fmt.Sprintf("❌ [Actuator-DLQ] Manual retry failed for event ID %s", id),
 			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
 			slog.String("eventId", id),

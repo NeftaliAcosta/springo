@@ -30,6 +30,19 @@ var (
 	listenersMu sync.RWMutex
 )
 
+type listenerNameKey struct{}
+
+func withListenerName(ctx context.Context, eventType reflect.Type, index int) context.Context {
+	return context.WithValue(ctx, listenerNameKey{}, fmt.Sprintf("%s#%d", eventType.String(), index))
+}
+
+func listenerName(ctx context.Context, event interface{}) string {
+	if name, ok := ctx.Value(listenerNameKey{}).(string); ok && name != "" {
+		return name
+	}
+	return reflect.TypeOf(event).String() + "#0"
+}
+
 // RegisterListener registers a new handler for a specific event type.
 func RegisterListener(handler interface{}) {
 	handlerVal := reflect.ValueOf(handler)
@@ -289,8 +302,9 @@ func (p *defaultEventPublisher) dispatch(ctx context.Context, event interface{},
 		outboxCountersMu.Unlock()
 	}
 
-	for _, handler := range handlers {
-		p.dispatchToHandler(ctx, handler, event, outboxID)
+	for index, handler := range handlers {
+		handlerCtx := withListenerName(ctx, eventType, index)
+		p.dispatchToHandler(handlerCtx, handler, event, outboxID)
 	}
 }
 
@@ -691,7 +705,7 @@ func handleFailure(ctx context.Context, event interface{}, err error) {
 	failedEvent := FailedEventEntity{
 		EventName:    reflect.TypeOf(event).String(),
 		Payload:      string(payload),
-		ListenerName: "DefaultListener",
+		ListenerName: listenerName(ctx, event),
 		Error:        err.Error(),
 		Status:       "PENDING",
 		Retries:      0,
@@ -773,6 +787,7 @@ func init() {
 
 	// Register DLQ retry callback in web layer to allow decoupled trigger from Actuator API
 	web.RegisterDlqRetryCallback(RedispatchEvent)
+	web.RegisterDlqRetryListenerCallback(RedispatchEventForListener)
 
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
@@ -858,53 +873,91 @@ func releasePollerLock(db *gorm.DB) {
 
 // RedispatchEvent deserializes a JSON payload to its registered event type and executes its listeners
 func RedispatchEvent(ctx context.Context, eventName string, payload string) error {
+	return redispatchEvent(ctx, eventName, payload, "")
+}
+
+// RedispatchEventForListener retries only the listener recorded in the DLQ row.
+func RedispatchEventForListener(ctx context.Context, eventName, listenerName, payload string) error {
+	return redispatchEvent(ctx, eventName, payload, listenerName)
+}
+
+func matchesEventType(t reflect.Type, eventName string) bool {
+	tStr := t.String()
+	tName := t.Name()
+	if t.Kind() == reflect.Pointer {
+		tName = t.Elem().Name()
+	}
+
+	cleanEventName := eventName
+	if idx := strings.LastIndex(eventName, "."); idx != -1 {
+		cleanEventName = eventName[idx+1:]
+	}
+
+	return tStr == eventName || tName == eventName || tName == cleanEventName ||
+		strings.HasSuffix(tStr, "."+eventName) || strings.HasSuffix(eventName, "."+tName) ||
+		strings.HasSuffix(tStr, "."+cleanEventName)
+}
+
+func findEventHandlers(eventName string) (reflect.Type, []EventListener) {
 	listenersMu.RLock()
-	var foundType reflect.Type
-	var handlers []EventListener
+	defer listenersMu.RUnlock()
+
 	for t, h := range listeners {
-		tStr := t.String()
-		tName := t.Name()
-		if t.Kind() == reflect.Pointer {
-			tName = t.Elem().Name()
-		}
-
-		cleanEventName := eventName
-		if idx := strings.LastIndex(eventName, "."); idx != -1 {
-			cleanEventName = eventName[idx+1:]
-		}
-
-		if tStr == eventName || tName == eventName || tName == cleanEventName ||
-			strings.HasSuffix(tStr, "."+eventName) || strings.HasSuffix(eventName, "."+tName) ||
-			strings.HasSuffix(tStr, "."+cleanEventName) {
-			foundType = t
-			handlers = h
-			break
+		if matchesEventType(t, eventName) {
+			return t, h
 		}
 	}
-	listenersMu.RUnlock()
+	return nil, nil
+}
 
-	if foundType == nil || len(handlers) == 0 {
-		return fmt.Errorf("no listener registered for event type '%s'", eventName)
-	}
-
-	var eventVal interface{}
-	if foundType.Kind() == reflect.Pointer {
-		ptr := reflect.New(foundType.Elem()).Interface()
+func deserializeEventPayload(targetType reflect.Type, payload string) (interface{}, error) {
+	if targetType.Kind() == reflect.Pointer {
+		ptr := reflect.New(targetType.Elem()).Interface()
 		if err := json.Unmarshal([]byte(payload), ptr); err != nil {
-			return fmt.Errorf("failed to deserialize event payload: %w", err)
+			return nil, fmt.Errorf("failed to deserialize event payload: %w", err)
 		}
-		eventVal = ptr
-	} else {
-		ptr := reflect.New(foundType).Interface()
-		if err := json.Unmarshal([]byte(payload), ptr); err != nil {
-			return fmt.Errorf("failed to deserialize event payload: %w", err)
-		}
-		eventVal = reflect.ValueOf(ptr).Elem().Interface()
+		return ptr, nil
 	}
 
+	ptr := reflect.New(targetType).Interface()
+	if err := json.Unmarshal([]byte(payload), ptr); err != nil {
+		return nil, fmt.Errorf("failed to deserialize event payload: %w", err)
+	}
+	return reflect.ValueOf(ptr).Elem().Interface(), nil
+}
+
+func shouldExecuteHandler(targetListener, currentListener string) bool {
+	return targetListener == "" || targetListener == "DefaultListener" || targetListener == currentListener
+}
+
+func hasMatchingListener(handlers []EventListener, foundType reflect.Type, targetListener string) bool {
+	if targetListener == "" || targetListener == "DefaultListener" {
+		return true
+	}
+	for index := range handlers {
+		if targetListener == fmt.Sprintf("%s#%d", foundType.String(), index) {
+			return true
+		}
+	}
+	return false
+}
+
+func executeRedispatchHandlers(
+	ctx context.Context,
+	foundType reflect.Type,
+	handlers []EventListener,
+	eventVal interface{},
+	eventName string,
+	targetListener string,
+) error {
 	var firstErr error
-	for _, handler := range handlers {
-		if err := handler(ctx, eventVal); err != nil {
+	for index, handler := range handlers {
+		currentName := fmt.Sprintf("%s#%d", foundType.String(), index)
+		if !shouldExecuteHandler(targetListener, currentName) {
+			continue
+		}
+		handlerCtx := withListenerName(ctx, foundType, index)
+		if err := handler(handlerCtx, eventVal); err != nil {
 			slog.Warn("Listener error in redispatch",
 				slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
 				slog.String("event_name", eventName),
@@ -916,4 +969,22 @@ func RedispatchEvent(ctx context.Context, eventName string, payload string) erro
 		}
 	}
 	return firstErr
+}
+
+func redispatchEvent(ctx context.Context, eventName, payload, targetListener string) error {
+	foundType, handlers := findEventHandlers(eventName)
+	if foundType == nil || len(handlers) == 0 {
+		return fmt.Errorf("no listener registered for event type '%s'", eventName)
+	}
+
+	eventVal, err := deserializeEventPayload(foundType, payload)
+	if err != nil {
+		return err
+	}
+
+	if !hasMatchingListener(handlers, foundType, targetListener) {
+		return fmt.Errorf("listener %q is not registered for event type %q", targetListener, eventName)
+	}
+
+	return executeRedispatchHandlers(ctx, foundType, handlers, eventVal, eventName, targetListener)
 }

@@ -32,6 +32,13 @@ func (m *RetryManager) ProcessDLQ() error {
 	if db == nil {
 		return nil
 	}
+	// Recover leases left by a crashed worker before selecting new work.
+	staleBefore := time.Now().Add(-5 * time.Minute)
+	if err := db.Model(&FailedEventEntity{}).
+		Where("status = ? AND updated_at < ?", "RETRYING", staleBefore).
+		Updates(map[string]interface{}{"status": "FAILED"}).Error; err != nil {
+		return err
+	}
 
 	var failedEvents []FailedEventEntity
 	// Find events that are eligible for retry (status is PENDING or FAILED and time has come or retries == 0)
@@ -95,7 +102,7 @@ func (m *RetryManager) updateRetryState(
 		ctx = web.WithTraceID(ctx, fe.TraceID)
 	}
 
-	if err := RedispatchEvent(ctx, fe.EventName, fe.Payload); err != nil {
+	if err := RedispatchEventForListener(ctx, fe.EventName, fe.ListenerName, fe.Payload); err != nil {
 		slog.Warn("Recovery attempt failed for event",
 			slog.String(logging.SubsystemKey, logging.FrameworkSubsystem),
 			slog.Uint64("event_id", uint64(fe.ID)),
@@ -123,4 +130,3 @@ func (m *RetryManager) updateRetryState(
 		_ = db.Delete(&FailedEventEntity{}, fe.ID).Error
 	}
 }
-

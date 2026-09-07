@@ -81,10 +81,11 @@ func init() {
 }
 
 var (
-	generatedPassword     string
-	generatedPasswordOnce sync.Once
-	dlqRetryCallback      func(ctx context.Context, eventName string, payload string) error
-	dlqRetryCallbackMu    sync.RWMutex
+	generatedPassword        string
+	generatedPasswordOnce    sync.Once
+	dlqRetryCallback         func(ctx context.Context, eventName string, payload string) error
+	dlqRetryListenerCallback func(ctx context.Context, eventName, listenerName, payload string) error
+	dlqRetryCallbackMu       sync.RWMutex
 )
 
 // RegisterDlqRetryCallback registers a callback to re-dispatch events, avoiding circular imports.
@@ -92,6 +93,13 @@ func RegisterDlqRetryCallback(fn func(ctx context.Context, eventName string, pay
 	dlqRetryCallbackMu.Lock()
 	defer dlqRetryCallbackMu.Unlock()
 	dlqRetryCallback = fn
+}
+
+// RegisterDlqRetryListenerCallback registers listener-scoped DLQ retries.
+func RegisterDlqRetryListenerCallback(fn func(ctx context.Context, eventName, listenerName, payload string) error) {
+	dlqRetryCallbackMu.Lock()
+	defer dlqRetryCallbackMu.Unlock()
+	dlqRetryListenerCallback = fn
 }
 
 func getOrGenerateCredentials() (string, string) {
