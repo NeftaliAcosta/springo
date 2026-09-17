@@ -1,7 +1,7 @@
 package web
 
 import (
-	"encoding/json"
+	stdjson "encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -9,9 +9,27 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"sync"
 
+	"github.com/NeftaliAcosta/springo/framework/config"
+	internaljson "github.com/NeftaliAcosta/springo/framework/internal/json"
 	"github.com/go-chi/chi/v5"
 )
+
+var (
+	jsonEngineOnce sync.Once
+	jsonEngineName string
+)
+
+func selectedJSONEngine() string {
+	jsonEngineOnce.Do(func() {
+		jsonEngineName = "standard"
+		if props := config.Get[WebServerProperties](); props != nil && props.JSONEngine != "" {
+			jsonEngineName = props.JSONEngine
+		}
+	})
+	return jsonEngineName
+}
 
 // DefaultMaxJSONBodyBytes sets the maximum allowed payload size for JSON bodies (10MB).
 const DefaultMaxJSONBodyBytes int64 = 10 * 1024 * 1024
@@ -23,7 +41,12 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, schema interface{}) bool
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxJSONBodyBytes)
-	decoder := json.NewDecoder(r.Body)
+	var decoder interface{ Decode(any) error }
+	if selectedJSONEngine() == "go-json" {
+		decoder = internaljson.NewDecoderFor("go-json", r.Body)
+	} else {
+		decoder = stdjson.NewDecoder(r.Body)
+	}
 
 	if err := decoder.Decode(schema); err != nil {
 		var maxBytesErr *http.MaxBytesError
@@ -140,7 +163,11 @@ func setFieldValue(field reflect.Value, value string) error {
 func WriteJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if selectedJSONEngine() == "go-json" {
+		_ = internaljson.NewEncoderFor("go-json", w).Encode(data)
+		return
+	}
+	_ = stdjson.NewEncoder(w).Encode(data)
 }
 
 // ApiResponse is the standard framework wrapper for all API responses

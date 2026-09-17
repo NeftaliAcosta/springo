@@ -54,8 +54,10 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 	return r
 }
 
+// WebServerProperties configures the HTTP server and JSON engine selection.
 type WebServerProperties struct {
 	Port              int                      `yaml:"port"`
+	JSONEngine        string                   `yaml:"json-engine"`
 	TrustedProxies    []string                 `yaml:"trusted-proxies"`
 	API               APIProperties            `yaml:"api"`
 	Multipart         MultipartProperties      `yaml:"multipart"`
@@ -83,6 +85,9 @@ type APIProperties struct {
 
 // Validate normalizes and validates the web server properties.
 func (p *WebServerProperties) Validate() error {
+	if p.JSONEngine != "" && p.JSONEngine != "standard" && p.JSONEngine != "go-json" {
+		return fmt.Errorf("server.json-engine must be 'standard' or 'go-json'")
+	}
 	if err := p.API.Validate(); err != nil {
 		return err
 	}
@@ -146,6 +151,7 @@ func init() {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		JSONEngine:        "standard",
 	})
 }
 
