@@ -90,6 +90,7 @@ type ApplicationContainer struct {
 	definitions         map[string]*BeanDefinition
 	repositoryFactories map[string]RepositoryFactory
 	serviceFactories    map[string]BeanFactory
+	typeMatches         map[reflect.Type][]string
 	db                  *gorm.DB
 	mu                  sync.RWMutex
 }
@@ -107,6 +108,7 @@ func GetContainer() *ApplicationContainer {
 			definitions:         make(map[string]*BeanDefinition),
 			repositoryFactories: make(map[string]RepositoryFactory),
 			serviceFactories:    make(map[string]BeanFactory),
+			typeMatches:         make(map[reflect.Type][]string),
 		}
 	})
 	return instance
@@ -138,6 +140,7 @@ func (c *ApplicationContainer) RegisterBeanDefinition(name string, factory inter
 	}
 
 	c.definitions[name] = def
+	c.typeMatches = make(map[reflect.Type][]string)
 }
 
 // RegisterRepositoryFactory adds a repository factory to be initialized later
@@ -150,6 +153,7 @@ func (c *ApplicationContainer) RegisterRepositoryFactory(name string, factory Re
 		Scope:   ScopeSingleton,
 		Factory: factory,
 	}
+	c.typeMatches = make(map[reflect.Type][]string)
 }
 
 // RegisterServiceFactory adds a service factory to be initialized later
@@ -162,6 +166,7 @@ func (c *ApplicationContainer) RegisterServiceFactory(name string, factory BeanF
 		Scope:   ScopeSingleton,
 		Factory: factory,
 	}
+	c.typeMatches = make(map[reflect.Type][]string)
 }
 
 // InitializeAllBeans executes all factories in the correct order (Singleton scope only)
@@ -204,6 +209,7 @@ func (c *ApplicationContainer) RegisterBean(name string, bean interface{}) {
 			// Empty: Used solely to mark the sync.Once initialization as completed
 		}) // Mark once as completed
 	}
+	c.typeMatches = make(map[reflect.Type][]string)
 }
 
 // GetBean retrieves a bean by its name (context-less fallback)
@@ -407,10 +413,14 @@ func (c *ApplicationContainer) findBeanNameByType(paramType reflect.Type) (strin
 // FindMatchingBeanNames collects all registered bean names assignable to the specified target type.
 func (c *ApplicationContainer) findMatchingBeanNames(paramType reflect.Type) []string {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	if matches, ok := c.typeMatches[paramType]; ok {
+		c.mu.RUnlock()
+		return matches
+	}
+	c.mu.RUnlock()
 
 	var matches []string
-
+	c.mu.RLock()
 	for name, def := range c.definitions {
 		if isDefinitionAssignable(def, paramType) {
 			matches = append(matches, name)
@@ -422,7 +432,15 @@ func (c *ApplicationContainer) findMatchingBeanNames(paramType reflect.Type) []s
 			matches = append(matches, name)
 		}
 	}
+	c.mu.RUnlock()
 
+	c.mu.Lock()
+	if cached, ok := c.typeMatches[paramType]; ok {
+		c.mu.Unlock()
+		return cached
+	}
+	c.typeMatches[paramType] = append([]string(nil), matches...)
+	c.mu.Unlock()
 	return matches
 }
 
@@ -601,6 +619,7 @@ func (c *ApplicationContainer) ReplaceBean(name string, mockBean interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.beans[name] = mockBean
+	c.typeMatches = make(map[reflect.Type][]string)
 
 	if _, exists := c.definitions[name]; !exists {
 		c.definitions[name] = &BeanDefinition{
@@ -635,6 +654,7 @@ func (c *ApplicationContainer) Clear() {
 		def.once = sync.Once{}
 	}
 	c.db = nil
+	c.typeMatches = make(map[reflect.Type][]string)
 }
 
 // ResetAll removes all initialized bean instances, resets the DB connection,
@@ -646,6 +666,7 @@ func (c *ApplicationContainer) ResetAll() {
 	c.definitions = make(map[string]*BeanDefinition)
 	c.repositoryFactories = make(map[string]RepositoryFactory)
 	c.serviceFactories = make(map[string]BeanFactory)
+	c.typeMatches = make(map[reflect.Type][]string)
 	c.db = nil
 }
 
@@ -654,11 +675,11 @@ func (c *ApplicationContainer) GetAllBeans() map[string]interface{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	copy := make(map[string]interface{})
+	beansCopy := make(map[string]interface{})
 	for k, v := range c.beans {
-		copy[k] = v
+		beansCopy[k] = v
 	}
-	return copy
+	return beansCopy
 }
 
 // GetDB retrieves the database connection
