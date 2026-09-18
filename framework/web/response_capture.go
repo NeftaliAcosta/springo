@@ -13,6 +13,7 @@ import (
 type capturedResponseKeyType struct{}
 
 var capturedResponseKey = capturedResponseKeyType{}
+var responseWriterPool = sync.Pool{New: func() any { return &responseCaptureWriter{} }}
 
 // CapturedResponse holds buffered response data accessible in the middleware chain.
 type CapturedResponse struct {
@@ -33,16 +34,23 @@ func GetCapturedResponse(ctx context.Context) (*CapturedResponse, bool) {
 // ResponseCaptureMiddleware wraps ResponseWriter to buffer status, headers, and body for post-processing.
 func ResponseCaptureMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		captured := &CapturedResponse{
-			StatusCode: http.StatusOK,
-			Headers:    make(http.Header),
-		}
+		captured := &CapturedResponse{StatusCode: http.StatusOK, Headers: make(http.Header)}
+		pooled := requestOptimizationEnabled()
 		ctx := context.WithValue(r.Context(), capturedResponseKey, captured)
 		cw := newResponseCaptureWriter(w, captured)
+		if pooled {
+			cw = responseWriterPool.Get().(*responseCaptureWriter)
+			cw.underlying = w
+			cw.captured = captured
+		}
 
 		next.ServeHTTP(cw, r.WithContext(ctx))
 
 		cw.flushToOriginal()
+		if pooled {
+			cw.reset()
+			responseWriterPool.Put(cw)
+		}
 	})
 }
 
@@ -53,6 +61,13 @@ type responseCaptureWriter struct {
 	wroteHeader bool
 	hijacked    bool
 	mu          sync.Mutex
+}
+
+func (w *responseCaptureWriter) reset() {
+	w.underlying = nil
+	w.captured = nil
+	w.wroteHeader = false
+	w.hijacked = false
 }
 
 func newResponseCaptureWriter(w http.ResponseWriter, captured *CapturedResponse) *responseCaptureWriter {

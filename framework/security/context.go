@@ -21,6 +21,9 @@ func GetUser(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
+	if state, ok := RequestStateFromContext(ctx); ok {
+		return state.User
+	}
 	if user, ok := ctx.Value(userCtxKey).(string); ok {
 		return user
 	}
@@ -101,6 +104,9 @@ func GetBearerToken(ctx context.Context) string {
 	if ctx == nil {
 		return ""
 	}
+	if state, ok := RequestStateFromContext(ctx); ok {
+		return state.Token
+	}
 	if token, ok := ctx.Value(bearerTokenCtxKey).(string); ok {
 		return token
 	}
@@ -131,11 +137,17 @@ func WithSecurityContext(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	ctx = context.WithValue(ctx, userCtxKey, user)
-	ctx = context.WithValue(ctx, rolesCtxKey, roles)
-	ctx = context.WithValue(ctx, claimsCtxKey, claims)
-	ctx = context.WithValue(ctx, bearerTokenCtxKey, bearerToken)
+	if state, ok := RequestStateFromContext(ctx); ok {
+		state.User = user
+		state.Roles = roles
+		state.Claims = claims
+		state.Token = bearerToken
+	} else {
+		ctx = context.WithValue(ctx, userCtxKey, user)
+		ctx = context.WithValue(ctx, rolesCtxKey, roles)
+		ctx = context.WithValue(ctx, claimsCtxKey, claims)
+		ctx = context.WithValue(ctx, bearerTokenCtxKey, bearerToken)
+	}
 
 	// Keep legacy keys populated for backward compatibility
 	ctx = context.WithValue(ctx, UserContextKey, user)
@@ -149,6 +161,9 @@ func extractRawRoles(ctx context.Context) []string {
 	if ctx == nil {
 		return nil
 	}
+	if state, ok := RequestStateFromContext(ctx); ok {
+		return state.Roles
+	}
 	if roles, ok := ctx.Value(rolesCtxKey).([]string); ok {
 		return roles
 	}
@@ -161,6 +176,9 @@ func extractRawRoles(ctx context.Context) []string {
 func extractRawClaims(ctx context.Context) map[string]any {
 	if ctx == nil {
 		return nil
+	}
+	if state, ok := RequestStateFromContext(ctx); ok {
+		return state.Claims
 	}
 	if claims, ok := ctx.Value(claimsCtxKey).(map[string]any); ok {
 		return claims

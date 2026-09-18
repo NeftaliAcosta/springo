@@ -28,6 +28,9 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 	r.Use(CsrfMiddleware)
 	r.Use(TracingMiddleware)
 	r.Use(RequestScopeMiddleware)
+	if requestOptimizationEnabled() {
+		r.Use(RequestOptimizationMiddleware)
+	}
 
 	defaultLocale := "en"
 	if i18nProps := config.Get[I18nProperties](); i18nProps != nil && i18nProps.DefaultLocale != "" {
@@ -56,16 +59,17 @@ func CreateDefaultRouter(customMiddlewares ...DefaultMiddlewareHook) chi.Router 
 
 // WebServerProperties configures the HTTP server and JSON engine selection.
 type WebServerProperties struct {
-	Port              int                      `yaml:"port"`
-	JSONEngine        string                   `yaml:"json-engine"`
-	TrustedProxies    []string                 `yaml:"trusted-proxies"`
-	API               APIProperties            `yaml:"api"`
-	Multipart         MultipartProperties      `yaml:"multipart"`
-	Security          ServerSecurityProperties `yaml:"security"`
-	ReadHeaderTimeout time.Duration            `yaml:"read-header-timeout"`
-	ReadTimeout       time.Duration            `yaml:"read-timeout"`
-	WriteTimeout      time.Duration            `yaml:"write-timeout"`
-	IdleTimeout       time.Duration            `yaml:"idle-timeout"`
+	Port                int                      `yaml:"port"`
+	JSONEngine          string                   `yaml:"json-engine"`
+	RequestOptimization bool                     `yaml:"request-optimization"`
+	TrustedProxies      []string                 `yaml:"trusted-proxies"`
+	API                 APIProperties            `yaml:"api"`
+	Multipart           MultipartProperties      `yaml:"multipart"`
+	Security            ServerSecurityProperties `yaml:"security"`
+	ReadHeaderTimeout   time.Duration            `yaml:"read-header-timeout"`
+	ReadTimeout         time.Duration            `yaml:"read-timeout"`
+	WriteTimeout        time.Duration            `yaml:"write-timeout"`
+	IdleTimeout         time.Duration            `yaml:"idle-timeout"`
 }
 
 // MultipartProperties controls multipart/form-data request processing.
