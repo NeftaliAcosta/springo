@@ -22,6 +22,20 @@ SprinGo provides a Spring Boot-like configuration engine:
 
 ## 2. Defining Configuration Properties
 
+### Request optimization (optional)
+
+SprinGo keeps the legacy request path by default. To enable pooled `RequestState` and HTTP response writers, add:
+
+```yaml
+server:
+  features:
+    request-optimization: true
+```
+
+The property is optional. Omitted or `false` preserves existing `context.WithValue()` access and application behavior.
+The optimized path sanitizes pooled authentication state before reuse. Validate workload benchmarks before enabling it
+in production.
+
 Create a struct matching your YAML hierarchy:
 
 **Suggested File Path**: `internal/infrastructure/config/sentry_config.go`

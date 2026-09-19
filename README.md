@@ -26,7 +26,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc20` is a Release Candidate. Validate it in a staging environment before adopting it
+> ⚠️ **Release status:** `v1.0.0-rc21` is a Release Candidate. Validate it in a staging environment before adopting it
 > in critical production workloads.
 
 ---
@@ -35,7 +35,7 @@
 
 ```bash
 # 1. Install the SprinGo CLI
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc20
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc21
 
 # 2. Create a new microservice
 springo new my-service
@@ -100,7 +100,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc20)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc21)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
@@ -292,6 +292,20 @@ server:
     memory-threshold: 8388608
 ```
 
+### Request optimization (opt-in)
+
+RequestState and safe HTTP writer pooling remain disabled by default. Existing applications need no configuration
+change. Enable them only after validating workload benchmarks:
+
+```yaml
+server:
+  features:
+    request-optimization: true
+```
+
+The flag is optional. Omitted or `false` preserves the legacy request path and security context keys. The optimized
+path resets pooled state before reuse.
+
 ```bash
 # Development profile (loads resources/application-dev.yaml)
 SPRINGO_PROFILES_ACTIVE=dev go run cmd/app/main.go
@@ -436,4 +450,3 @@ Thank you to all the people who contribute to **SprinGo Framework**!
 ## 📄 License
 
 SprinGo Framework is open-source software licensed under the **[MIT License](LICENSE)**.
-
