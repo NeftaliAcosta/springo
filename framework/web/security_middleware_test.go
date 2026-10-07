@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	"github.com/NeftaliAcosta/springo/framework/ioc"
 	"github.com/NeftaliAcosta/springo/framework/security"
 )
 
@@ -191,4 +192,59 @@ func TestAuthMiddlewarePublicPathWildcardBypassesAuth(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for public swagger path, got %d", rec.Code)
 	}
+}
+
+func TestAuthMiddlewareDisabledOAuth2WithLegacyJWT(t *testing.T) {
+	container := ioc.GetContainer()
+	oldJWT := config.Get[security.JwtProperties]()
+	oldOAuth := config.Get[security.OAuth2ResourceServerProperties]()
+	prefix := "github.com/NeftaliAcosta/springo/framework/security."
+	t.Cleanup(func() {
+		container.RegisterBean(prefix+"JwtProperties", oldJWT)
+		container.RegisterBean(prefix+"OAuth2ResourceServerProperties", oldOAuth)
+	})
+	disabled := false
+	secret := "regression-test-secret-for-hs256"
+	container.RegisterBean(prefix+"OAuth2ResourceServerProperties", &security.OAuth2ResourceServerProperties{Enabled: &disabled})
+	container.RegisterBean(prefix+"JwtProperties", &security.JwtProperties{Secret: secret, Algorithm: "HS256", PublicPaths: []string{"/auth/login"}})
+	token, err := security.NewJwtProvider(secret, 15).GenerateTokenWithClaims("user-123", []string{"USER"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, path, token, user string
+		status                  int
+	}{
+		{"valid JWT", "/user/me", token, "user-123", http.StatusOK},
+		{"missing JWT", "/user/me", "", "", http.StatusUnauthorized},
+		{"invalid JWT", "/user/me", "invalid", "", http.StatusUnauthorized},
+		{"public login", "/auth/login", "", "", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if got := security.GetUser(r.Context()); got != tc.user {
+					t.Errorf("user = %q, want %q", got, tc.user)
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			if tc.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tc.token)
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.status {
+				t.Errorf("status = %d, want %d", rec.Code, tc.status)
+			}
+		})
+	}
+	t.Run("disabled without JWT remains disabled", func(t *testing.T) {
+		container.RegisterBean(prefix+"JwtProperties", &security.JwtProperties{})
+		handler := AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/user/me", nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("status = %d, want 200", rec.Code)
+		}
+	})
 }

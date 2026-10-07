@@ -35,12 +35,19 @@ type securityConfig struct {
 
 // ResolveSecurityConfig resolves the security configuration from the framework properties.
 func resolveSecurityConfig() securityConfig {
-	if oauth2Props := config.Get[security.OAuth2ResourceServerProperties](); isOAuth2Configured(oauth2Props) {
+	oauth2Props := config.Get[security.OAuth2ResourceServerProperties]()
+	jwtProps := config.Get[security.JwtProperties]()
+
+	if isOAuth2Configured(oauth2Props) {
 		return buildOAuth2Config(oauth2Props)
 	}
 
-	if jwtProps := config.Get[security.JwtProperties](); isLegacyJwtConfigured(jwtProps) {
+	if isLegacyJwtConfigured(jwtProps) {
 		return buildLegacyJwtConfig(jwtProps)
+	}
+
+	if oauth2Props != nil && oauth2Props.Enabled != nil && !*oauth2Props.Enabled {
+		return buildOAuth2Config(oauth2Props)
 	}
 
 	return defaultSecurityConfig()
@@ -51,7 +58,7 @@ func isOAuth2Configured(props *security.OAuth2ResourceServerProperties) bool {
 		return false
 	}
 	if props.Enabled != nil && !*props.Enabled {
-		return true
+		return false
 	}
 	return hasOAuth2KeysOrURIs(props)
 }

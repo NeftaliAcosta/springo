@@ -26,7 +26,7 @@
 
 ---
 
-> ⚠️ **Release status:** `v1.0.0-rc21` is a Release Candidate. Validate it in a staging environment before adopting it
+> ⚠️ **Release status:** `v1.0.0-rc22` is a Release Candidate. Validate it in a staging environment before adopting it
 > in critical production workloads.
 
 ---
@@ -35,7 +35,7 @@
 
 ```bash
 # 1. Install the SprinGo CLI
-go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc21
+go install github.com/NeftaliAcosta/springo/cmd/springo@v1.0.0-rc22
 
 # 2. Create a new microservice
 springo new my-service
@@ -100,7 +100,7 @@ springo/
 │   └── web/                   # Chi router, Actuator & Validation
 ├── cmd/
 │   ├── cli/                   # 🛠️ SprinGo CLI implementation
-│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc21)
+│   └── springo/               # Installable `springo` entrypoint (v1.0.0-rc22)
 ├── demo-api/                  # 🚀 Reference Application
 └── README.md
 ```
