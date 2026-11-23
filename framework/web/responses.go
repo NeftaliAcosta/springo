@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/NeftaliAcosta/springo/framework/config"
+	frameworkErrors "github.com/NeftaliAcosta/springo/framework/errors"
 	internaljson "github.com/NeftaliAcosta/springo/framework/internal/json"
 	"github.com/go-chi/chi/v5"
 )
@@ -81,16 +82,19 @@ func BindRequest(r *http.Request, dest interface{}) error {
 		field := typ.Field(i)
 		fieldVal := val.Field(i)
 
-		var rawValue string
+		var rawValue, name string
 		if pathTag := field.Tag.Get("path"); pathTag != "" {
-			rawValue = chi.URLParam(r, pathTag)
+			rawValue, name = chi.URLParam(r, pathTag), pathTag
 		} else if queryTag := field.Tag.Get("query"); queryTag != "" {
-			rawValue = r.URL.Query().Get(queryTag)
+			rawValue, name = r.URL.Query().Get(queryTag), queryTag
 		}
 
 		if rawValue != "" {
+			// A value that does not convert to the field type (?page=abc) is the client's mistake, so it is answered
+			// with 400 instead of surfacing as an unexpected 500. The message names the parameter but not the raw
+			// value, which is echoed nowhere.
 			if err := setFieldValue(fieldVal, rawValue); err != nil {
-				return fmt.Errorf("field %s: %w", field.Name, err)
+				return frameworkErrors.BadRequest(fmt.Sprintf("invalid value for parameter %q", name), "INVALID_PARAMETER")
 			}
 		}
 	}
